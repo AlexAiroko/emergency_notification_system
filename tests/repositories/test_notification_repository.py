@@ -1,13 +1,12 @@
-from app.models.group import Group
+import pytest
+
 from app.models.notification import NotificationStatus
 from app.repositories.notification import NotificationRepository
-from app.models.notification_template import NotificationTemplate
 
 
-def test_create_notification(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
+@pytest.mark.asyncio
+async def test_create_notification(notification_template, group, notification_repo):
+    notification = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
@@ -18,38 +17,35 @@ def test_create_notification(db_session, notification_template, group):
     assert notification.status == NotificationStatus.PENDING
 
 
-def test_get_notification(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    created = repo.create(
+@pytest.mark.asyncio
+async def test_get_notification(notification_template, group, notification_repo):
+    created = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
 
-    found = repo.get(created.id)
+    found = await notification_repo.get(created.id)
 
     assert found is not None
     assert found.id == created.id
     assert found.template_id == notification_template.id
 
 
-def test_get_notification_not_found(db_session):
-    repo = NotificationRepository(db_session)
-
-    result = repo.get(999999)
+@pytest.mark.asyncio
+async def test_get_notification_not_found(notification_repo):
+    result = await notification_repo.get(999999)
 
     assert result is None
 
 
-def test_get_with_relations(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
+@pytest.mark.asyncio
+async def test_get_with_relations(notification_template, group, notification_repo):
+    notification = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
 
-    result = repo.get_with_relations(notification.id)
+    result = await notification_repo.get_with_relations(notification.id)
 
     assert result is not None
     assert result.template is not None
@@ -58,81 +54,76 @@ def test_get_with_relations(db_session, notification_template, group):
     assert result.group.id == group.id
 
 
-def test_get_with_relations_not_found(db_session):
-    repo = NotificationRepository(db_session)
-
-    result = repo.get_with_relations(999999)
+@pytest.mark.asyncio
+async def test_get_with_relations_not_found(notification_repo):
+    result = await notification_repo.get_with_relations(999999)
 
     assert result is None
 
 
-def test_mark_started(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
+@pytest.mark.asyncio
+async def test_mark_started_without_commit(notification_template, group, notification_repo):
+    notification = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
 
-    repo.mark_started(notification.id)
-    db_session.commit()
+    await notification_repo.mark_started(notification.id)
 
-    updated = repo.get(notification.id)
-
+    updated = await notification_repo.get(notification.id)
     assert updated.status == NotificationStatus.IN_PROGRESS
 
 
-def test_mark_started_without_commit(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
+@pytest.mark.asyncio
+async def test_mark_finished(notification_template, group, notification_repo):
+    notification = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
 
-    repo.mark_started(notification.id)
+    await notification_repo.mark_finished(notification.id)
 
-    updated = repo.get(notification.id)
-    assert updated.status == NotificationStatus.IN_PROGRESS
-
-
-def test_mark_finished(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
-        template_id=notification_template.id,
-        group_id=group.id,
-    )
-
-    repo.mark_finished(notification.id)
-    db_session.commit()
-
-    updated = repo.get(notification.id)
+    updated = await notification_repo.get(notification.id)
 
     assert updated.status == NotificationStatus.SUCCESS
 
 
-def test_update_status_direct(db_session, notification_template, group):
-    repo = NotificationRepository(db_session)
-
-    notification = repo.create(
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [
+        NotificationStatus.PENDING,
+        NotificationStatus.IN_PROGRESS,
+        NotificationStatus.SUCCESS,
+        NotificationStatus.FAILED,
+    ],
+)
+async def test_update_status_direct(
+    notification_template,
+    group,
+    status,
+    notification_repo,
+):
+    notification = await notification_repo.create(
         template_id=notification_template.id,
         group_id=group.id,
     )
 
-    repo.update_status(notification.id, NotificationStatus.SUCCESS)
-    db_session.commit()
+    await notification_repo.update_status(notification.id, status)
 
-    updated = repo.get(notification.id)
+    updated = await notification_repo.get(notification.id)
 
-    assert updated.status == NotificationStatus.SUCCESS
+    assert updated.status == status
 
 
-def test_update_status_non_existing(db_session):
-    repo = NotificationRepository(db_session)
-
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "mark_started",
+        "mark_finished",
+    ],
+)
+async def test_mark_started_non_existing(method_name, notification_repo):
     # Method shouldn't throw an exception
-    repo.mark_started(999999)
-    db_session.commit()
-    
-    assert True
+    await getattr(notification_repo, method_name)(999999)

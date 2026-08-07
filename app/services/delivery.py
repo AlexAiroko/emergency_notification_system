@@ -16,13 +16,13 @@ class DeliveryService:
         self.template_service = NotificationTemplateService()
         self.provider_registry = ProviderRegistry()
 
-    def get_delivery(
+    async def _get_delivery(
         self,
         uow: UnitOfWork,
         delivery_id: int,
     ) -> Delivery:
-        delivery = uow.delivery_repo.get(delivery_id)
-
+        delivery = await uow.delivery_repo.get(delivery_id)
+        
         if delivery is None:
             logger.warning(
                 "Delivery %s not found",
@@ -32,7 +32,14 @@ class DeliveryService:
 
         return delivery
 
-    def send(
+    async def get_delivery(
+        self,
+        uow: UnitOfWork,
+        delivery_id: int,
+    ) -> Delivery:
+        return await self._get_delivery(uow, delivery_id)
+
+    async def send_delivery(
         self,
         uow: UnitOfWork,
         delivery_id: int,
@@ -41,16 +48,9 @@ class DeliveryService:
         Sends one Delivery.
         """
 
-        delivery = uow.delivery_repo.get(delivery_id)
+        delivery = await self._get_delivery(uow, delivery_id)
 
-        if delivery is None:
-            logger.warning(
-                "Delivery %s not found",
-                delivery_id,
-            )
-            raise DeliveryNotFoundError(delivery_id)
-
-        notification = uow.notification_repo.get_with_relations(
+        notification = await uow.notification_repo.get_with_relations(
             delivery.notification_id,
         )
 
@@ -61,7 +61,7 @@ class DeliveryService:
             )
             raise NotificationNotFoundError(delivery.notification_id)
 
-        template = self.template_service.ensure_template_is_active(
+        template = await self.template_service.ensure_template_is_active(
             uow,
             notification.template_id,
         )
@@ -72,16 +72,16 @@ class DeliveryService:
             delivery.channel,
         )
 
-        provider = self.provider_registry.get(delivery.channel)
-
         try:
-            provider_message_id = provider.send(
+            provider = self.provider_registry.get(delivery.channel)
+
+            provider_message_id = await provider.send(
                 to=delivery.address,
                 subject=template.subject,
                 body=template.body,
             )
 
-            uow.delivery_repo.mark_sent(
+            await uow.delivery_repo.mark_sent(
                 delivery.id,
                 provider_message_id=provider_message_id,
             )
@@ -92,17 +92,17 @@ class DeliveryService:
             )
 
         except ProviderError as exc:
-            uow.delivery_repo.mark_failed(
+            await uow.delivery_repo.mark_failed(
                 delivery.id,
                 error_message=str(exc),
             )
 
-            logger.warning(
+            logger.exception(
                 "Failed delivery %s",
                 delivery.id,
             )
 
-    def send_pending(
+    async def send_pending(
         self,
         uow: UnitOfWork,
         notification_id: int,
@@ -111,7 +111,7 @@ class DeliveryService:
         Sends all Deliveries with a PENDING status.
         """
 
-        deliveries = uow.delivery_repo.get_by_notification(notification_id)
+        deliveries = await uow.delivery_repo.get_by_notification(notification_id)
 
         pending = [
             delivery
@@ -126,10 +126,7 @@ class DeliveryService:
         )
 
         for delivery in pending:
-            self.send(
-                uow,
-                delivery.id,
-            )
+            await self.send_delivery(uow, delivery.id)
 
         logger.info(
             "Finished processing pending deliveries for notification %s",

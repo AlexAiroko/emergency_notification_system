@@ -7,25 +7,27 @@ from app.repositories.active import ActiveRepository
 class ContactMethodRepository(ActiveRepository):
     model = ContactMethod
     
-    def get_by_contact(self, contact_id: int) -> list[ContactMethod]:
+    async def get_by_contact(self, contact_id: int) -> list[ContactMethod]:
         stmt = (
-            select(ContactMethod)
-            .where(ContactMethod.contact_id == contact_id)
-            .order_by(ContactMethod.id)
+            select(self.model)
+            .where(self.model.contact_id == contact_id)
+            .order_by(self.model.id)
         )
-        res = self.session.execute(stmt)
-        methods = list(res.scalars().all())
-        return methods
+        res = await self.session.execute(stmt)
+        return res.scalars().all()
 
-    def get_by_contact_and_channel(self, contact_id: int, channel: ChannelType) -> list[ContactMethod]:
+    async def get_by_contact_and_channel(
+            self,
+            contact_id: int,
+            channel: ChannelType,
+    ) -> list[ContactMethod]:
         stmt = (
-            select(ContactMethod)
+            select(self.model)
             .where(
-                ContactMethod.contact_id == contact_id,
-                ContactMethod.channel == channel,
+                self.model.contact_id == contact_id,
+                self.model.channel == channel,
             )
-            .order_by(ContactMethod.id)
+            .order_by(self.model.id)
         )
-        res = self.session.execute(stmt)
-        methods = list(res.scalars().all())
-        return methods
+        res = await self.session.execute(stmt)
+        return res.scalars().all()

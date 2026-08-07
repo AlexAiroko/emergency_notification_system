@@ -1,8 +1,9 @@
-import smtplib
 import logging
 
 from email.message import EmailMessage
 from email.utils import make_msgid
+
+import aiosmtplib
 
 from app.core.config import settings
 from app.providers.base import BaseProvider, ProviderError
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmailProvider(BaseProvider):
-    def send(
+    async def send(
         self,
         to: str,
         body: str,
@@ -33,23 +34,25 @@ class EmailProvider(BaseProvider):
         message.set_content(body)
 
         try:
-            with smtplib.SMTP(
-                settings.SMTP_HOST,
-                settings.SMTP_PORT,
+            smtp = aiosmtplib.SMTP(
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
                 timeout=30,
-            ) as smtp:
+            )
 
-                if settings.SMTP_USE_TLS:
-                    logger.info("Starting TLS for email delivery")
-                    smtp.starttls()
+            await smtp.connect()
 
-                logger.info("Authenticating SMTP user=%s", settings.SMTP_USERNAME)
-                smtp.login(
-                    settings.SMTP_USERNAME,
-                    settings.SMTP_PASSWORD,
-                )
+            if settings.SMTP_USE_TLS:
+                logger.info("Starting TLS for email delivery")
+                await smtp.starttls()
 
-                smtp.send_message(message)
+            logger.info("Authenticating SMTP user=%s", settings.SMTP_USERNAME)
+            await smtp.login(
+                settings.SMTP_USERNAME,
+                settings.SMTP_PASSWORD,
+            )
+
+            await smtp.send_message(message)
 
             logger.info(
                 "Email sent successfully (to=%s, message_id=%s)",
@@ -68,3 +71,7 @@ class EmailProvider(BaseProvider):
                 to,
             )
             raise ProviderError(str(exc)) from exc
+
+        finally:
+            if smtp.is_connected:
+                await smtp.quit()

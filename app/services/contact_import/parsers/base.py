@@ -15,7 +15,7 @@ class BaseContactParser(ABC):
     )
     
     @abstractmethod
-    def parse(
+    async def parse(
         self,
         file: UploadFile,
     ) -> list[dict]:

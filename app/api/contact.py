@@ -19,13 +19,13 @@ router = APIRouter(
     response_model=ContactResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_contact(
+async def create_contact(
     data: ContactCreate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactService()
     
-    contact = service.create_contact(
+    contact = await service.create_contact(
         uow=uow,
         external_id=data.external_id,
         name=data.name,
@@ -38,12 +38,12 @@ def create_contact(
     "",
     response_model=list[ContactResponse],
 )
-def get_many_contacts(
+async def get_many_contacts(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.contact_repo.get_many(
+    return await uow.contact_repo.get_many(
         limit=limit,
         offset=offset,
     )
@@ -53,12 +53,12 @@ def get_many_contacts(
     "/active",
     response_model=list[ContactResponse],
 )
-def get_active_contacts(
+async def get_active_contacts(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.contact_repo.get_active(
+    return await uow.contact_repo.get_active(
         limit=limit,
         offset=offset,
     )
@@ -68,13 +68,13 @@ def get_active_contacts(
     "/{contact_id}",
     response_model=ContactResponse,
 )
-def get_contact_by_id(
+async def get_contact_by_id(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactService()
 
-    contact = service.get_contact(uow, contact_id)
+    contact = await service.get_contact(uow, contact_id)
 
     return contact
 
@@ -83,13 +83,13 @@ def get_contact_by_id(
     "/{contact_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def update_contact(
+async def update_contact(
     contact_id: int,
     data: ContactUpdate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactService()
-    service.update_contact(
+    await service.update_contact(
         uow=uow,
         contact_id=contact_id,
         name=data.name,
@@ -100,34 +100,36 @@ def update_contact(
     "/{contact_id}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def activate_contact(
+async def activate_contact(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    uow.contact_repo.activate(contact_id)
+    service = ContactService()
+    await service.activate_contact(uow, contact_id)
 
 
 @router.patch(
     "/{contact_id}/deactivate",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def deactivate_contact(
+async def deactivate_contact(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    uow.contact_repo.deactivate(contact_id)
+    service = ContactService()
+    await service.deactivate_contact(uow, contact_id)
 
 
 @router.post(
     "/import",
     response_model=ContactImportResponse,
 )
-def import_contacts(
+async def import_contacts(
     file: UploadFile = File(),
 ):
     service = ContactImportService()
     
-    result = service.import_contacts(file=file)
+    result = await service.import_contacts(file=file)
     
     return ContactImportResponse(
         message="Contacts import completed",

@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from fastapi import UploadFile
 from openpyxl import load_workbook
 
@@ -6,10 +8,13 @@ from app.services.contact_import.parsers.base import BaseContactParser
 
 
 class ExcelParser(BaseContactParser):
-    def parse(self, file: UploadFile) -> list[dict]:
-        file.file.seek(0)
+    async def parse(self, file: UploadFile) -> list[dict]:
+        await file.seek(0)
+
+        content = await file.read()
+        # TODO: Sync function blocks the event loop, add to_thread
+        workbook = load_workbook(BytesIO(content))
         
-        workbook = load_workbook(file.file)
         sheet = workbook.active
         
         rows = list(sheet.iter_rows(values_only=True))

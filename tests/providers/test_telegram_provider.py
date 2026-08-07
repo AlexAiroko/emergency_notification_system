@@ -1,22 +1,30 @@
-from unittest.mock import patch, Mock
+from unittest.mock import AsyncMock, Mock, patch
+
+import httpx
 import pytest
 
-from app.providers.telegram import TelegramProvider
 from app.providers.base import ProviderError
+from app.providers.telegram import TelegramProvider
 
 
-def test_telegram_send_success():
+@pytest.mark.asyncio
+async def test_telegram_send_success():
     provider = TelegramProvider(token="fake-token")
 
-    mock_response = Mock()
-    mock_response.json.return_value = {
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {
         "ok": True,
         "result": {"message_id": 123},
     }
-    mock_response.raise_for_status.return_value = None
 
-    with patch("app.providers.telegram.requests.post", return_value=mock_response) as mock_post:
-        message_id = provider.send(
+    with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
+        client = AsyncMock()
+        client.post.return_value = response
+
+        client_cls.return_value.__aenter__.return_value = client
+
+        message_id = await provider.send(
             to="123456",
             subject="Hello",
             body="World",
@@ -24,10 +32,11 @@ def test_telegram_send_success():
 
         assert message_id == "123"
 
-        mock_post.assert_called_once()
+        client.post.assert_awaited_once()
 
-        args, kwargs = mock_post.call_args
-        assert "sendMessage" in args[0]
+        _, kwargs = client.post.call_args
+
+        assert kwargs["url"].endswith("/sendMessage")
 
         payload = kwargs["json"]
         assert payload["chat_id"] == "123456"
@@ -35,55 +44,70 @@ def test_telegram_send_success():
         assert "World" in payload["text"]
 
 
-def test_telegram_api_error():
+@pytest.mark.asyncio
+async def test_telegram_api_error():
     provider = TelegramProvider(token="fake-token")
 
-    mock_response = Mock()
-    mock_response.json.return_value = {
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {
         "ok": False,
         "description": "Bad Request",
     }
-    mock_response.raise_for_status.return_value = None
 
-    with patch("app.providers.telegram.requests.post", return_value=mock_response):
-        with pytest.raises(ProviderError) as exc_info:
-            provider.send(
+    with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
+        client = AsyncMock()
+        client.post.return_value = response
+
+        client_cls.return_value.__aenter__.return_value = client
+
+        with pytest.raises(ProviderError, match="Telegram API error"):
+            await provider.send(
                 to="123",
                 body="Hello",
             )
 
-        assert "Telegram API error" in str(exc_info.value)
 
-
-def test_telegram_http_error():
+@pytest.mark.asyncio
+async def test_telegram_http_error():
     provider = TelegramProvider(token="fake-token")
 
-    with patch("app.providers.telegram.requests.post") as mock_post:
-        mock_post.side_effect = Exception("Connection failed")
+    with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
+        client = AsyncMock()
+        client.post.side_effect = httpx.ConnectError("Connection failed")
 
-        with pytest.raises(ProviderError) as exc_info:
-            provider.send(
+        client_cls.return_value.__aenter__.return_value = client
+
+        with pytest.raises(ProviderError, match="Telegram send failed"):
+            await provider.send(
                 to="123",
                 body="Hello",
             )
 
-        assert "Connection failed" in str(exc_info.value)
 
-
-def test_telegram_without_subject():
+@pytest.mark.asyncio
+async def test_telegram_without_subject():
     provider = TelegramProvider(token="fake-token")
 
-    mock_response = Mock()
-    mock_response.json.return_value = {
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json.return_value = {
         "ok": True,
         "result": {"message_id": 10},
     }
-    mock_response.raise_for_status.return_value = None
 
-    with patch("app.providers.telegram.requests.post", return_value=mock_response):
-        message_id = provider.send(
+    with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
+        client = AsyncMock()
+        client.post.return_value = response
+
+        client_cls.return_value.__aenter__.return_value = client
+
+        message_id = await provider.send(
             to="123",
             body="Only body",
         )
 
         assert message_id == "10"
+
+        payload = client.post.call_args.kwargs["json"]
+        assert payload["text"] == "Only body"

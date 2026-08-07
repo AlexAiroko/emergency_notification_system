@@ -7,15 +7,15 @@ from app.services.notification import NotificationService
 logger = logging.getLogger(__name__)
 
 
-def send_notification_task(notification_id: int):
+async def send_notification_task(notification_id: int):
     logger.info(
         "Background task started (notification_id=%s)",
         notification_id,
     )
 
     try:
-        with UnitOfWork() as uow:
-            NotificationService().send_notification(
+        async with UnitOfWork() as uow:
+            await NotificationService().send_notification(
                 uow=uow,
                 notification_id=notification_id,
             )

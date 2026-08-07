@@ -1,12 +1,9 @@
 import pytest
 
-from app.repositories.notification_template import NotificationTemplateRepository
 
-
-def test_create_template(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
-    template = repo.create(
+@pytest.mark.asyncio
+async def test_create_template(template_repo):
+    template = await template_repo.create(
         name="Welcome",
         subject="Hello",
         body="Welcome to the system",
@@ -19,10 +16,9 @@ def test_create_template(db_session):
     assert template.is_active is True
 
 
-def test_create_template_with_defaults(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
-    template = repo.create(name="Only name", body="Only body")
+@pytest.mark.asyncio
+async def test_create_template_with_defaults(template_repo):
+    template = await template_repo.create(name="Only name", body="Only body")
 
     assert template.name == "Only name"
     assert template.subject is None
@@ -30,24 +26,23 @@ def test_create_template_with_defaults(db_session):
     assert template.is_active is True
 
 
-def test_get_template(db_session, notification_template):
-    repo = NotificationTemplateRepository(db_session)
-
-    found = repo.get(notification_template.id)
+@pytest.mark.asyncio
+async def test_get_template(notification_template, template_repo):
+    found = await template_repo.get(notification_template.id)
 
     assert found is not None
     assert found.id == notification_template.id
     assert found.body == notification_template.body
 
 
-def test_get_template_not_found(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
-    result = repo.get(999999)
+@pytest.mark.asyncio
+async def test_get_template_not_found(template_repo):
+    result = await template_repo.get(999999)
 
     assert result is None
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "statuses, expected_count",
     [
@@ -57,51 +52,28 @@ def test_get_template_not_found(db_session):
         ([], 0),
     ],
 )
-def test_get_active(db_session, statuses, expected_count):
-    repo = NotificationTemplateRepository(db_session)
-
+async def test_get_active(statuses, expected_count, template_repo):
     for index, is_active in enumerate(statuses, start=1):
-        repo.create(
+        await template_repo.create(
             name=f"Template {index}",
             subject=f"Subject {index}",
             body=f"Body {index}",
             is_active=is_active,
         )
 
-    templates = repo.get_active()
+    templates = await template_repo.get_active()
 
     assert len(templates) == expected_count
     assert all(template.is_active for template in templates)
 
 
-def test_get_active_with_limit_and_offset(db_session):
-    repo = NotificationTemplateRepository(db_session)
+@pytest.mark.asyncio
+async def test_get_active_with_limit_and_offset(template_repo):
+    await template_repo.create(name="Name 1", body="Body 1", is_active=True)
+    await template_repo.create(name="Name 2", body="Body 2", is_active=True)
+    await template_repo.create(name="Name 3", body="Body 3", is_active=True)
 
-    repo.create(name="Name 1", body="Body 1", is_active=True)
-    repo.create(name="Name 2", body="Body 2", is_active=True)
-    repo.create(name="Name 3", body="Body 3", is_active=True)
-
-    templates = repo.get_active(limit=2, offset=1)
-
-    assert len(templates) == 2
-    assert [template.name for template in templates] == [
-        "Name 2",
-        "Name 3",
-    ]
-    assert [template.body for template in templates] == [
-        "Body 2",
-        "Body 3",
-    ]
-
-
-def test_get_many(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
-    repo.create(name="Name 1", body="Body 1")
-    repo.create(name="Name 2", body="Body 2")
-    repo.create(name="Name 3", body="Body 3")
-
-    templates = repo.get_many(limit=2, offset=1)
+    templates = await template_repo.get_active(limit=2, offset=1)
 
     assert len(templates) == 2
     assert [template.name for template in templates] == [
@@ -114,55 +86,69 @@ def test_get_many(db_session):
     ]
 
 
-def test_get_many_empty(db_session):
-    repo = NotificationTemplateRepository(db_session)
+@pytest.mark.asyncio
+async def test_get_many(template_repo):
+    await template_repo.create(name="Name 1", body="Body 1")
+    await template_repo.create(name="Name 2", body="Body 2")
+    await template_repo.create(name="Name 3", body="Body 3")
 
-    templates = repo.get_many()
+    templates = await template_repo.get_many(limit=2, offset=1)
+
+    assert len(templates) == 2
+    assert [template.name for template in templates] == [
+        "Name 2",
+        "Name 3",
+    ]
+    assert [template.body for template in templates] == [
+        "Body 2",
+        "Body 3",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_many_empty(template_repo):
+    templates = await template_repo.get_many()
 
     assert templates == []
 
 
-def test_update(db_session, notification_template):
-    repo = NotificationTemplateRepository(db_session)
-
-    repo.update(
+@pytest.mark.asyncio
+async def test_update(notification_template, template_repo):
+    await template_repo.update(
         notification_template.id,
         subject="Updated subject",
         body="Updated body",
     )
-    db_session.flush()
 
-    updated = repo.get(notification_template.id)
+    updated = await template_repo.get(notification_template.id)
 
     assert updated.subject == "Updated subject"
     assert updated.body == "Updated body"
+    assert updated.name == notification_template.name
+    assert updated.is_active == notification_template.is_active
 
 
-def test_deactivate_template(db_session, notification_template):
-    repo = NotificationTemplateRepository(db_session)
+@pytest.mark.asyncio
+async def test_deactivate_template(notification_template, template_repo):
+    await template_repo.deactivate(notification_template.id)
 
-    repo.deactivate(notification_template.id)
-    db_session.flush()
-
-    updated = repo.get(notification_template.id)
+    updated = await template_repo.get(notification_template.id)
 
     assert updated.is_active is False
 
 
-def test_activate_template(db_session, notification_template):
-    repo = NotificationTemplateRepository(db_session)
+@pytest.mark.asyncio
+async def test_activate_template(notification_template, template_repo):
+    await template_repo.deactivate(notification_template.id)
 
-    repo.deactivate(notification_template.id)
-    db_session.flush()
+    await template_repo.activate(notification_template.id)
 
-    repo.activate(notification_template.id)
-    db_session.flush()
-
-    updated = repo.get(notification_template.id)
+    updated = await template_repo.get(notification_template.id)
 
     assert updated.is_active is True
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "method_name, expected_state",
     [
@@ -170,37 +156,24 @@ def test_activate_template(db_session, notification_template):
         ("deactivate", False),
     ],
 )
-def test_activation_methods(
-    db_session,
+async def test_activation_methods(
     notification_template,
     method_name,
     expected_state,
+    template_repo,
 ):
-    repo = NotificationTemplateRepository(db_session)
+    await getattr(template_repo, method_name)(notification_template.id)
 
-    getattr(repo, method_name)(notification_template.id)
-    db_session.flush()
-
-    updated = repo.get(notification_template.id)
+    updated = await template_repo.get(notification_template.id)
 
     assert updated.is_active is expected_state
 
 
-def test_activate_non_existing_template(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method_name", ["activate", "deactivate"])
+async def test_activation_methods_non_existing_template(
+    method_name,
+    template_repo,
+):
     # Method shouldn't throw an exception
-    repo.activate(999999)
-    db_session.flush()
-
-    assert True
-
-
-def test_deactivate_non_existing_template(db_session):
-    repo = NotificationTemplateRepository(db_session)
-
-    # Method shouldn't throw an exception
-    repo.deactivate(999999)
-    db_session.flush()
-
-    assert True
+    await getattr(template_repo, method_name)(999999)

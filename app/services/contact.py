@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContactService:
-    def create_contact(
+    async def create_contact(
         self,
         uow: UnitOfWork,
         external_id: str | None,
@@ -25,7 +25,7 @@ class ContactService:
         """
 
         try:
-            contact = uow.contact_repo.create(
+            contact = await uow.contact_repo.create(
                 name=name,
                 external_id=external_id,
                 is_active=is_active,
@@ -45,7 +45,7 @@ class ContactService:
 
         return contact
 
-    def get_contact(
+    async def get_contact(
         self,
         uow: UnitOfWork,
         contact_id: int,
@@ -54,8 +54,8 @@ class ContactService:
         Returns a contact by ID.
         """
 
-        contact = uow.contact_repo.get(contact_id)
-
+        contact = await uow.contact_repo.get(contact_id)
+        
         if contact is None:
             logger.warning(
                 "Contact %s not found",
@@ -65,27 +65,46 @@ class ContactService:
 
         return contact
 
-    def update_contact(
+    async def update_contact(
         self,
         uow: UnitOfWork,
         contact_id: int,
         name: str,
-    ) -> None:
-        contact = uow.contact_repo.get(contact_id)
+    ) -> Contact:
+        updated = await uow.contact_repo.update(
+            contact_id,
+            name=name,
+        )
 
-        if contact is None:
+        if updated is None:
             logger.warning(
                 "Contact %s not found",
                 contact_id,
             )
             raise ContactNotFoundError(contact_id)
 
-        uow.contact_repo.update(
-            contact_id,
-            name=name,
+        logger.info(
+            "Updated contact %s (name=%s)",
+            updated.id,
+            updated.name,
         )
 
-        logger.info(
-            "Updated contact %s",
-            contact_id,
-        )
+        return updated
+
+    async def activate_contact(
+        self,
+        uow: UnitOfWork,
+        contact_id: int,
+    ) -> None:
+        await self.get_contact(uow, contact_id)
+
+        await uow.contact_repo.activate(contact_id)
+
+    async def deactivate_contact(
+        self,
+        uow: UnitOfWork,
+        contact_id: int,
+    ) -> None:
+        await self.get_contact(uow, contact_id)
+
+        await uow.contact_repo.deactivate(contact_id)

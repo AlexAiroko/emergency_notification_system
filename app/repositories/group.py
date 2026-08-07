@@ -10,24 +10,24 @@ from app.repositories.active import ActiveRepository
 class GroupRepository(ActiveRepository):
     model = Group
     
-    def get_with_contacts(self, group_id: int) -> Group | None:
+    async def get_with_contacts(self, group_id: int) -> Group | None:
         stmt = (
-            select(Group)
-            .options(selectinload(Group.contacts))
-            .where(Group.id == group_id)
+            select(self.model)
+            .options(selectinload(self.model.contacts))
+            .where(self.model.id == group_id)
         )
-        res = self.session.execute(stmt)
-        group = res.scalar_one_or_none()
-        return group
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
     
-    def add_contact(self, group_id: int, contact_id: int) -> None:
+    async def add_contact(self, group_id: int, contact_id: int) -> None:
         link = GroupContact(
             group_id=group_id,
             contact_id=contact_id,
         )
         self.session.add(link)
+        await self.flush()
 
-    def remove_contact_from_group(self, group_id: int, contact_id: int) -> None:
+    async def remove_contact_from_group(self, group_id: int, contact_id: int) -> None:
         stmt = (
             delete(GroupContact)
             .where(
@@ -35,15 +35,14 @@ class GroupRepository(ActiveRepository):
                 GroupContact.contact_id == contact_id,
             )
         )
-        self.session.execute(stmt)
+        await self.session.execute(stmt)
     
-    def get_contacts_for_dispatch(self, group_id: int) -> list[Contact]:
+    async def get_contacts_for_dispatch(self, group_id: int) -> list[Contact]:
         stmt = (
             select(Contact)
             .join(GroupContact, GroupContact.contact_id == Contact.id)
             .where(GroupContact.group_id == group_id)
             .options(selectinload(Contact.contact_methods))
         )
-        res = self.session.execute(stmt)
-        contacts = list(res.scalars().all())
-        return contacts
+        res = await self.session.execute(stmt)
+        return res.scalars().all()

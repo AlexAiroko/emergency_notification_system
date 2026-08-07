@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -6,94 +6,137 @@ from app.providers.base import ProviderError
 from app.providers.email import EmailProvider
 
 
-def test_send_success():
+@pytest.mark.asyncio
+async def test_send_success():
     provider = EmailProvider()
 
-    with patch("app.providers.email.smtplib.SMTP") as mock_smtp:
-        smtp_instance = mock_smtp.return_value.__enter__.return_value
+    with patch("app.providers.email.aiosmtplib.SMTP") as mock_smtp:
+        smtp = Mock()
 
-        message_id = provider.send(
+        smtp.connect = AsyncMock()
+        smtp.starttls = AsyncMock()
+        smtp.login = AsyncMock()
+        smtp.send_message = AsyncMock()
+        smtp.quit = AsyncMock()
+        smtp.is_connected = True
+
+        mock_smtp.return_value = smtp
+
+        message_id = await provider.send(
             to="user@example.com",
             subject="Test Subject",
             body="Hello, world!",
         )
 
         mock_smtp.assert_called_once()
-        smtp_instance.starttls.assert_called_once()
-        smtp_instance.login.assert_called_once()
-        smtp_instance.send_message.assert_called_once()
 
-        sent_message = smtp_instance.send_message.call_args.args[0]
+        smtp.connect.assert_awaited_once()
+        smtp.starttls.assert_awaited_once()
+        smtp.login.assert_awaited_once()
+        smtp.send_message.assert_awaited_once()
+        smtp.quit.assert_awaited_once()
 
-        assert sent_message["To"] == "user@example.com"
-        assert sent_message["Subject"] == "Test Subject"
-        assert sent_message["Message-ID"] is not None
-        assert "Hello, world!" in sent_message.get_content()
+        message = smtp.send_message.call_args.args[0]
 
-        assert message_id == sent_message["Message-ID"]
+        assert message["To"] == "user@example.com"
+        assert message["Subject"] == "Test Subject"
+        assert message["Message-ID"] is not None
+        assert "Hello, world!" in message.get_content()
+
+        assert message_id == message["Message-ID"]
 
 
-def test_send_without_subject():
+@pytest.mark.asyncio
+async def test_send_without_subject():
     provider = EmailProvider()
 
-    with patch("app.providers.email.smtplib.SMTP") as mock_smtp:
-        smtp_instance = mock_smtp.return_value.__enter__.return_value
+    with patch("app.providers.email.aiosmtplib.SMTP") as mock_smtp:
+        smtp = Mock()
 
-        message_id = provider.send(
+        smtp.connect = AsyncMock()
+        smtp.starttls = AsyncMock()
+        smtp.login = AsyncMock()
+        smtp.send_message = AsyncMock()
+        smtp.quit = AsyncMock()
+        smtp.is_connected = True
+
+        mock_smtp.return_value = smtp
+
+        message_id = await provider.send(
             to="user@example.com",
             body="Body only",
         )
 
-        smtp_instance.send_message.assert_called_once()
+        smtp.send_message.assert_awaited_once()
 
-        sent_message = smtp_instance.send_message.call_args.args[0]
+        message = smtp.send_message.call_args.args[0]
 
-        assert sent_message["To"] == "user@example.com"
-        assert sent_message["Subject"] is None or sent_message["Subject"] == ""
-        assert message_id is not None
+        assert message["To"] == "user@example.com"
+        assert message["Subject"] == ""
+        assert message_id == message["Message-ID"]
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "smtp_method, error_message",
+    "smtp_method,error_message",
     [
+        ("connect", "Connection failed"),
         ("starttls", "TLS failed"),
         ("login", "Authentication failed"),
         ("send_message", "Send failed"),
     ],
 )
-def test_send_raises_provider_error(smtp_method, error_message):
+async def test_send_raises_provider_error(
+    smtp_method,
+    error_message,
+):
     provider = EmailProvider()
 
-    with patch("app.providers.email.smtplib.SMTP") as mock_smtp:
-        smtp_instance = mock_smtp.return_value.__enter__.return_value
+    with patch("app.providers.email.aiosmtplib.SMTP") as mock_smtp:
+        smtp = Mock()
 
-        getattr(smtp_instance, smtp_method).side_effect = Exception(error_message)
+        smtp.connect = AsyncMock()
+        smtp.starttls = AsyncMock()
+        smtp.login = AsyncMock()
+        smtp.send_message = AsyncMock()
+        smtp.quit = AsyncMock()
+        smtp.is_connected = True
 
-        with pytest.raises(ProviderError) as exc_info:
-            provider.send(
+        getattr(smtp, smtp_method).side_effect = Exception(error_message)
+
+        mock_smtp.return_value = smtp
+
+        with pytest.raises(ProviderError) as exc:
+            await provider.send(
                 to="user@example.com",
                 subject="Test",
                 body="Hello",
             )
 
-        assert error_message in str(exc_info.value)
+        assert error_message in str(exc.value)
+        assert isinstance(exc.value.__cause__, Exception)
 
-        # optional: verify chaining (if implemented)
-        assert isinstance(exc_info.value.__cause__, Exception)
+        smtp.quit.assert_awaited_once()
 
 
-def test_send_connection_error():
+@pytest.mark.asyncio
+async def test_quit_not_called_if_not_connected():
     provider = EmailProvider()
 
-    with patch("app.providers.email.smtplib.SMTP") as mock_smtp:
-        mock_smtp.side_effect = Exception("Connection failed")
+    with patch("app.providers.email.aiosmtplib.SMTP") as mock_smtp:
+        smtp = Mock()
 
-        with pytest.raises(ProviderError) as exc_info:
-            provider.send(
+        smtp.connect = AsyncMock(side_effect=Exception("Connection failed"))
+        smtp.quit = AsyncMock()
+        smtp.is_connected = False
+
+        mock_smtp.return_value = smtp
+
+        with pytest.raises(ProviderError):
+            await provider.send(
                 to="user@example.com",
                 subject="Test",
                 body="Hello",
             )
 
-        assert "Connection failed" in str(exc_info.value)
-        assert isinstance(exc_info.value.__cause__, Exception)
+        smtp.quit.assert_not_called()

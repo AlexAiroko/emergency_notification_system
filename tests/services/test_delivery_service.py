@@ -1,14 +1,17 @@
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.exceptions.delivery import DeliveryNotFoundError
+from app.exceptions.notification import NotificationNotFoundError
 from app.models.contact_method import ChannelType
 from app.models.delivery import DeliveryStatus
 from app.providers.base import ProviderError
 
 
-def test_send_success(delivery_service, uow):
+@pytest.mark.asyncio
+async def test_send_success(delivery_service, uow):
     delivery = SimpleNamespace(
         id=1,
         notification_id=10,
@@ -26,33 +29,32 @@ def test_send_success(delivery_service, uow):
     )
 
     provider = Mock()
-    provider.send.return_value = "msg-123"
+    provider.send = AsyncMock(return_value="msg-123")
 
-    uow.delivery_repo.get.return_value = delivery
-    uow.notification_repo.get_with_relations.return_value = notification
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.delivery_repo.mark_sent = AsyncMock()
+    uow.delivery_repo.mark_failed = AsyncMock()
 
-    delivery_service.template_service.ensure_template_is_active = Mock(
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
         return_value=template,
     )
+    delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    delivery_service.provider_registry.get = Mock(
-        return_value=provider,
-    )
+    await delivery_service.send_delivery(uow, 1)
 
-    delivery_service.send(uow, 1)
-
-    delivery_service.template_service.ensure_template_is_active.assert_called_once_with(
+    delivery_service.template_service.ensure_template_is_active.assert_awaited_once_with(
         uow,
         100,
     )
 
-    provider.send.assert_called_once_with(
+    provider.send.assert_awaited_once_with(
         to="user@mail.com",
         subject="Subject",
         body="Body",
     )
 
-    uow.delivery_repo.mark_sent.assert_called_once_with(
+    uow.delivery_repo.mark_sent.assert_awaited_once_with(
         1,
         provider_message_id="msg-123",
     )
@@ -60,35 +62,39 @@ def test_send_success(delivery_service, uow):
     uow.delivery_repo.mark_failed.assert_not_called()
 
 
-def test_send_delivery_not_found(delivery_service, uow):
-    uow.delivery_repo.get.return_value = None
+@pytest.mark.asyncio
+async def test_send_delivery_not_found(delivery_service, uow):
+    uow.delivery_repo.get = AsyncMock(return_value=None)
+    uow.notification_repo.get_with_relations = AsyncMock()
 
     with pytest.raises(
-        ValueError,
+        DeliveryNotFoundError,
         match="Delivery 1 not found",
     ):
-        delivery_service.send(uow, 1)
+        await delivery_service.send_delivery(uow, 1)
 
     uow.notification_repo.get_with_relations.assert_not_called()
 
 
-def test_send_notification_not_found(delivery_service, uow):
+@pytest.mark.asyncio
+async def test_send_notification_not_found(delivery_service, uow):
     delivery = SimpleNamespace(
         id=1,
         notification_id=10,
     )
 
-    uow.delivery_repo.get.return_value = delivery
-    uow.notification_repo.get_with_relations.return_value = None
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=None)
 
     with pytest.raises(
-        ValueError,
+        NotificationNotFoundError,
         match="Notification 10 not found",
     ):
-        delivery_service.send(uow, 1)
+        await delivery_service.send_delivery(uow, 1)
 
 
-def test_send_provider_error(delivery_service, uow):
+@pytest.mark.asyncio
+async def test_send_provider_error(delivery_service, uow):
     delivery = SimpleNamespace(
         id=1,
         notification_id=10,
@@ -106,22 +112,23 @@ def test_send_provider_error(delivery_service, uow):
     )
 
     provider = Mock()
-    provider.send.side_effect = ProviderError("SMTP failed")
+    provider.send = AsyncMock(
+        side_effect=ProviderError("SMTP failed"),
+    )
 
-    uow.delivery_repo.get.return_value = delivery
-    uow.notification_repo.get_with_relations.return_value = notification
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.delivery_repo.mark_sent = AsyncMock()
+    uow.delivery_repo.mark_failed = AsyncMock()
 
-    delivery_service.template_service.ensure_template_is_active = Mock(
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
         return_value=template,
     )
+    delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    delivery_service.provider_registry.get = Mock(
-        return_value=provider,
-    )
+    await delivery_service.send_delivery(uow, 1)
 
-    delivery_service.send(uow, 1)
-
-    uow.delivery_repo.mark_failed.assert_called_once_with(
+    uow.delivery_repo.mark_failed.assert_awaited_once_with(
         1,
         error_message="SMTP failed",
     )
@@ -129,7 +136,8 @@ def test_send_provider_error(delivery_service, uow):
     uow.delivery_repo.mark_sent.assert_not_called()
 
 
-def test_send_pending(delivery_service, uow):
+@pytest.mark.asyncio
+async def test_send_pending(delivery_service, uow):
     d1 = SimpleNamespace(
         id=1,
         status=DeliveryStatus.PENDING,
@@ -145,24 +153,25 @@ def test_send_pending(delivery_service, uow):
         status=DeliveryStatus.PENDING,
     )
 
-    uow.delivery_repo.get_by_notification.return_value = [
-        d1,
-        d2,
-        d3,
-    ]
+    uow.delivery_repo.get_by_notification = AsyncMock(
+        return_value=[d1, d2, d3],
+    )
 
-    delivery_service.send = Mock()
+    delivery_service.send_delivery = AsyncMock()
 
-    delivery_service.send_pending(uow, 10)
+    await delivery_service.send_pending(
+        uow,
+        notification_id=10,
+    )
 
-    delivery_service.send.assert_any_call(
+    delivery_service.send_delivery.assert_any_await(
         uow,
         1,
     )
 
-    delivery_service.send.assert_any_call(
+    delivery_service.send_delivery.assert_any_await(
         uow,
         3,
     )
 
-    assert delivery_service.send.call_count == 2
+    assert delivery_service.send_delivery.await_count == 2

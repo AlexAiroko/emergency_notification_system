@@ -16,13 +16,13 @@ router = APIRouter(
     "/{delivery_id}",
     response_model=DeliveryResponse,
 )
-def get_delivery(
+async def get_delivery(
     delivery_id: int,
     uow: UnitOfWork = Depends(get_uow)
 ):
     service = DeliveryService()
     
-    delivery = service.get_delivery(
+    delivery = await service.get_delivery(
         uow=uow,
         delivery_id=delivery_id,
     )

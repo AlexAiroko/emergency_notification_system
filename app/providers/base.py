@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
 
+from app.exceptions.base import AppError
 
-class ProviderError(Exception):
+
+class ProviderError(AppError):
     """Error sending through an external provider."""
     pass
 
 
 class BaseProvider(ABC):
     @abstractmethod
-    def send(
+    async def send(
         self,
         to: str,
         body: str,

@@ -1,14 +1,11 @@
 import pytest
 
 from app.models.contact_method import ChannelType
-from app.repositories.contact import ContactRepository
-from app.repositories.contact_method import ContactMethodRepository
 
 
-def test_create_contact_method(db_session, contact):
-    repo = ContactMethodRepository(db_session)
-
-    method = repo.create(
+@pytest.mark.asyncio
+async def test_create_contact_method(contact, contact_method_repo):
+    method = await contact_method_repo.create(
         contact_id=contact.id,
         channel=ChannelType.EMAIL,
         address="john@example.com",
@@ -20,10 +17,10 @@ def test_create_contact_method(db_session, contact):
     assert method.address == "john@example.com"
 
 
-def test_get_contact_method(db_session, contact_method):
-    repo = ContactMethodRepository(db_session)
+@pytest.mark.asyncio
+async def test_get_contact_method(contact_method, contact_method_repo):
 
-    found = repo.get(contact_method.id)
+    found = await contact_method_repo.get(contact_method.id)
 
     assert found is not None
     assert found.id == contact_method.id
@@ -32,14 +29,13 @@ def test_get_contact_method(db_session, contact_method):
     assert found.address == contact_method.address
 
 
-def test_get_contact_method_not_found(db_session):
-    repo = ContactMethodRepository(db_session)
-
-    result = repo.get(999999)
-
+@pytest.mark.asyncio
+async def test_get_contact_method_not_found(contact_method_repo):
+    result = await contact_method_repo.get(999999)
     assert result is None
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "channels, expected_count",
     [
@@ -49,24 +45,23 @@ def test_get_contact_method_not_found(db_session):
         ([], 0),
     ],
 )
-def test_get_by_contact(db_session, contact, channels, expected_count):
-    repo = ContactMethodRepository(db_session)
+async def test_get_by_contact(contact, channels, expected_count, contact_method_repo):
 
     for index, channel in enumerate(channels, start=1):
-        repo.create(
+        await contact_method_repo.create(
             contact_id=contact.id,
             channel=channel,
             address=f"address-{index}",
         )
 
-    methods = repo.get_by_contact(contact.id)
+    methods = await contact_method_repo.get_by_contact(contact.id)
 
     assert len(methods) == expected_count
     assert [method.id for method in methods] == sorted(
         method.id for method in methods
     )
 
-
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "target_channel, expected_addresses",
     [
@@ -75,31 +70,29 @@ def test_get_by_contact(db_session, contact, channels, expected_count):
         (ChannelType.TELEGRAM, []),
     ],
 )
-def test_get_by_contact_and_channel(
-    db_session,
+async def test_get_by_contact_and_channel(
     contact,
     target_channel,
     expected_addresses,
+    contact_method_repo,
 ):
-    repo = ContactMethodRepository(db_session)
-
-    repo.create(
+    await contact_method_repo.create(
         contact_id=contact.id,
         channel=ChannelType.EMAIL,
         address="a@example.com",
     )
-    repo.create(
+    await contact_method_repo.create(
         contact_id=contact.id,
         channel=ChannelType.EMAIL,
         address="b@example.com",
     )
-    repo.create(
+    await contact_method_repo.create(
         contact_id=contact.id,
         channel=ChannelType.SMS,
         address="+111",
     )
 
-    methods = repo.get_by_contact_and_channel(
+    methods = await contact_method_repo.get_by_contact_and_channel(
         contact.id,
         target_channel,
     )
@@ -107,48 +100,47 @@ def test_get_by_contact_and_channel(
     assert [method.address for method in methods] == expected_addresses
 
 
-def test_get_by_contact_does_not_return_other_contacts(
-    db_session,
+@pytest.mark.asyncio
+async def test_get_by_contact_does_not_return_other_contacts(
     contact,
+    contact_repo,
+    contact_method_repo,
 ):
-    repo = ContactMethodRepository(db_session)
-
-    repo.create(
+    await contact_method_repo.create(
         contact_id=contact.id,
         channel=ChannelType.EMAIL,
         address="owner@example.com",
     )
 
-    other_contact = ContactRepository(db_session).create(name="Other")
+    other_contact = await contact_repo.create(name="Other")
 
-    repo.create(
+    await contact_method_repo.create(
         contact_id=other_contact.id,
         channel=ChannelType.EMAIL,
         address="other@example.com",
     )
 
-    methods = repo.get_by_contact(contact.id)
+    methods = await contact_method_repo.get_by_contact(contact.id)
 
     assert len(methods) == 1
     assert methods[0].address == "owner@example.com"
 
 
-def test_delete_contact_method(db_session, contact_method):
-    repo = ContactMethodRepository(db_session)
+@pytest.mark.asyncio
+async def test_delete_contact_method(db_session, contact_method, contact_method_repo):
+    await contact_method_repo.delete(contact_method.id)
+    await db_session.flush()
 
-    repo.delete(contact_method.id)
-    db_session.flush()
-
-    result = repo.get(contact_method.id)
+    result = await contact_method_repo.get(contact_method.id)
 
     assert result is None
 
 
-def test_delete_non_existing_contact_method(db_session):
-    repo = ContactMethodRepository(db_session)
-
+@pytest.mark.asyncio
+async def test_delete_non_existing_contact_method(
+        db_session,
+        contact_method_repo,
+):
     # Method shouldn't throw an exception
-    repo.delete(999999)
-    db_session.flush()
-
-    assert True
+    await contact_method_repo.delete(999999)
+    await db_session.flush()

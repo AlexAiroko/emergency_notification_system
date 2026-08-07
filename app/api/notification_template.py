@@ -17,13 +17,13 @@ router = APIRouter(
     response_model=NotificationTemplateResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_template(
+async def create_template(
     data: NotificationTemplateCreate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
     
-    template = service.create_template(
+    template = await service.create_template(
         uow=uow,
         name=data.name,
         subject=data.subject,
@@ -38,14 +38,14 @@ def create_template(
     "",
     response_model=list[NotificationTemplateResponse],
 )
-def get_many_templates(
+async def get_many_templates(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
 
-    templates = service.get_many_templates(uow, limit, offset)
+    templates = await service.get_many_templates(uow, limit, offset)
     
     return templates
 
@@ -54,14 +54,14 @@ def get_many_templates(
     "/active",
     response_model=list[NotificationTemplateResponse],
 )
-def get_active_templates(
+async def get_active_templates(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
 
-    templates = service.get_active_templates(uow, limit, offset)
+    templates = await service.get_active_templates(uow, limit, offset)
     
     return templates
 
@@ -70,13 +70,13 @@ def get_active_templates(
     "/{template_id}",
     response_model=NotificationTemplateResponse,
 )
-def get_template_by_id(
+async def get_template_by_id(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
 
-    template = service.get_template(uow, template_id)
+    template = await service.get_template(uow, template_id)
     
     return template
 
@@ -85,14 +85,14 @@ def get_template_by_id(
     "/{template_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def update_template(
+async def update_template(
     template_id: int,
     data: NotificationTemplateUpdate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
     
-    service.update_template(
+    await service.update_template(
         uow,
         template_id,
         data.subject,
@@ -104,12 +104,12 @@ def update_template(
     "/{template_id}/activate",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def activate_template(
+async def activate_template(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
-    service.activate_template(
+    await service.activate_template(
         uow,
         template_id,
     )
@@ -119,12 +119,12 @@ def activate_template(
     "/{template_id}/deactivate",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def deactivate_template(
+async def deactivate_template(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationTemplateService()
-    service.deactivate_template(
+    await service.deactivate_template(
         uow,
         template_id,
     )

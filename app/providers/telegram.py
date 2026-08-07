@@ -1,5 +1,6 @@
 import logging
-import requests
+
+import httpx
 
 from app.providers.base import BaseProvider, ProviderError
 
@@ -12,9 +13,12 @@ class TelegramProvider(BaseProvider):
         self.token = token
         self.base_url = f"https://api.telegram.org/bot{self.token}"
 
-    def send(self, to: str, body: str, subject: str | None = None) -> str | None:
-        url = f"{self.base_url}/sendMessage"
-
+    async def send(
+        self, 
+        to: str, 
+        body: str, 
+        subject: str | None = None,
+    ) -> str | None:
         logger.info(
             "Started sending telegram message (chat_id=%s)",
             to,
@@ -27,7 +31,13 @@ class TelegramProvider(BaseProvider):
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=10)
+            # TODO: Use one common client for the entire app. 
+            # Not create a new client for each request
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.post(
+                    url=f"{self.base_url}/sendMessage",
+                    json=payload,
+                )
             response.raise_for_status()
 
             data = response.json()
@@ -50,7 +60,7 @@ class TelegramProvider(BaseProvider):
 
             return message_id
 
-        except requests.RequestException as exc:
+        except httpx.HTTPError as exc:
             logger.exception(
                 "Telegram request failed (chat_id=%s)",
                 to,

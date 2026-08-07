@@ -1,10 +1,8 @@
-from unittest.mock import Mock
-
-import pytest
+import pytest_asyncio
 
 from app.services.notification_template import NotificationTemplateService
 
 
-@pytest.fixture
-def template_service():
+@pytest_asyncio.fixture
+async def template_service():
     return NotificationTemplateService()

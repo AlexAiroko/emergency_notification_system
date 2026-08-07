@@ -1,12 +1,12 @@
 from unittest.mock import Mock
 
-import pytest
+import pytest_asyncio
 
 from app.services.delivery import DeliveryService
 
 
-@pytest.fixture
-def delivery_service():
+@pytest_asyncio.fixture
+async def delivery_service():
     service = DeliveryService()
     service.template_service = Mock()
     return service

@@ -16,7 +16,20 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationTemplateService:
-    def create_template(
+    async def _get_template(
+        self,
+        uow: UnitOfWork,
+        template_id: int,
+    ) -> NotificationTemplate:
+        template = await uow.template_repo.get(template_id)
+
+        if template is None:
+            logger.warning("Template %s not found", template_id)
+            raise TemplateNotFoundError(template_id)
+
+        return template
+
+    async def create_template(
         self,
         uow: UnitOfWork,
         body: str,
@@ -34,7 +47,7 @@ class NotificationTemplateService:
         self._validate_body(body)
 
         try:
-            template = uow.template_repo.create(
+            template = await uow.template_repo.create(
                 body=body,
                 name=name,
                 subject=subject,
@@ -57,19 +70,14 @@ class NotificationTemplateService:
             
             raise TemplateAlreadyExistsError() from exc
 
-    def get_template(self, uow: UnitOfWork, template_id: int) -> NotificationTemplate | None:
+    async def get_template(self, uow: UnitOfWork, template_id: int) -> NotificationTemplate | None:
         """
         Returns a template by ID.
         """
         
-        template = uow.template_repo.get(template_id)
-        
-        if template is None:
-            raise TemplateNotFoundError(template_id)
-        
-        return template
+        return await self._get_template(uow, template_id)
 
-    def get_many_templates(
+    async def get_many_templates(
         self,
         uow: UnitOfWork,
         limit: int = 20,
@@ -79,12 +87,12 @@ class NotificationTemplateService:
         Returns a list of all templates.
         """
         
-        return uow.template_repo.get_many(
+        return await uow.template_repo.get_many(
             limit=limit,
             offset=offset,
         )
 
-    def get_active_templates(
+    async def get_active_templates(
         self,
         uow: UnitOfWork,
         limit: int = 20,
@@ -94,18 +102,18 @@ class NotificationTemplateService:
         Returns only active templates.
         """
         
-        return uow.template_repo.get_active(
+        return await uow.template_repo.get_active(
             limit=limit,
             offset=offset,
         )
 
-    def update_template(
+    async def update_template(
         self,
         uow: UnitOfWork,
         template_id: int,
         subject: str | None,
         body: str,
-    ) -> None:
+    ) -> NotificationTemplate:
         """
         Updates the template's subject and body.
 
@@ -115,10 +123,12 @@ class NotificationTemplateService:
         
         self._validate_body(body)
 
+        await self._get_template(uow, template_id)
+
         # The repository expects a string, so we replace None with an empty string.
-        uow.template_repo.update(
+        updated = await uow.template_repo.update(
             template_id,
-            subject=subject or "",
+            subject=subject,
             body=body,
         )
         
@@ -127,31 +137,35 @@ class NotificationTemplateService:
             template_id,
         )
 
-    def activate_template(self, uow: UnitOfWork, template_id: int) -> None:
+        return updated
+
+    async def activate_template(self, uow: UnitOfWork, template_id: int) -> None:
         """
         Makes the template active.
         """
-        
-        uow.template_repo.activate(template_id)
+
+        await self._get_template(uow, template_id)
+        await uow.template_repo.activate(template_id)
         
         logger.info(
             "Template %s activated",
             template_id,
         )
 
-    def deactivate_template(self, uow: UnitOfWork, template_id: int) -> None:
+    async def deactivate_template(self, uow: UnitOfWork, template_id: int) -> None:
         """
         Makes the template inactive.
         """
-        
-        uow.template_repo.deactivate(template_id)
+
+        await self._get_template(uow, template_id)
+        await uow.template_repo.deactivate(template_id)
         
         logger.info(
             "Template %s deactivated",
             template_id,
         )
 
-    def ensure_template_is_active(
+    async def ensure_template_is_active(
         self,
         uow: UnitOfWork,
         template_id: int,
@@ -160,10 +174,7 @@ class NotificationTemplateService:
         Returns the template if it exists and is active.
         """
         
-        template = uow.template_repo.get(template_id)
-
-        if template is None:
-            raise TemplateNotFoundError(template_id)
+        template = await self._get_template(uow, template_id)
 
         if not template.is_active:
             raise TemplateInactiveError(template_id)

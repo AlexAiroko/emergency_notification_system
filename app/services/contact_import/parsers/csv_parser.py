@@ -8,10 +8,11 @@ from app.services.contact_import.parsers.base import BaseContactParser
 
 
 class CsvParser(BaseContactParser):
-    def parse(self, file: UploadFile) -> list[dict]:
-        file.file.seek(0)
-        
-        text = file.file.read().decode("utf-8")
+    async def parse(self, file: UploadFile) -> list[dict]:
+        await file.seek(0)
+
+        content = await file.read()
+        text = content.decode("utf-8")
         
         reader = csv.DictReader(io.StringIO(text))
         

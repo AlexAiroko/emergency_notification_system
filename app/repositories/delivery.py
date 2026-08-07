@@ -1,4 +1,4 @@
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from app.models.delivery import Delivery, DeliveryStatus
 from app.repositories.base import BaseRepository
@@ -7,69 +7,62 @@ from app.repositories.base import BaseRepository
 class DeliveryRepository(BaseRepository):
     model = Delivery
     
-    def create_bulk(self, deliveries: list[Delivery]) -> None:
+    async def create_bulk(self, deliveries: list[Delivery]) -> None:
         self.session.add_all(deliveries)
+        await self.flush()
     
-    def get_by_notification(self, notification_id: int) -> list[Delivery]:
+    async def get_by_notification(self, notification_id: int) -> list[Delivery]:
         stmt = (
-            select(Delivery)
-            .where(Delivery.notification_id == notification_id)
+            select(self.model)
+            .where(self.model.notification_id == notification_id)
         )
-        res = self.session.execute(stmt)
-        deliveries = list(res.scalars().all())
-        return deliveries
+        res = await self.session.execute(stmt)
+        return res.scalars().all()
     
-    def update_status(
+    async def update_status(
         self,
         delivery_id: int,
         status: DeliveryStatus,
     ) -> None:
-        stmt = (
-            update(Delivery)
-            .where(Delivery.id == delivery_id)
-            .values(status=status)
+        await self.update(
+            delivery_id,
+            status=status,
         )
-        self.session.execute(stmt)
     
-    def mark_sent(
+    async def mark_sent(
         self,
         delivery_id: int,
         provider_message_id: str | None = None,
     ) -> None:
-        stmt = (
-            update(Delivery)
-            .where(Delivery.id == delivery_id)
-            .values(
-                status=DeliveryStatus.SENT,
-                provider_message_id=provider_message_id,
-            )
+        await self.update(
+            delivery_id,
+            status=DeliveryStatus.SENT,
+            provider_message_id=provider_message_id,
         )
-        self.session.execute(stmt)
     
-    def mark_failed(
+    async def mark_failed(
         self,
         delivery_id: int,
         error_message: str,
     ) -> None:
-        stmt = (
-            update(Delivery)
-            .where(Delivery.id == delivery_id)
-            .values(
-                status=DeliveryStatus.FAILED,
-                error_message=error_message,
-            )
+        await self.update(
+            delivery_id,
+            status=DeliveryStatus.FAILED,
+            error_message=error_message,
         )
-        self.session.execute(stmt)
 
-    def get_stats(self, notification_id: int) -> dict:
+    async def get_stats(self, notification_id: int) -> dict[str, int]:
         stmt = (
             select(
-                Delivery.status,
-                func.count(Delivery.id)
+                self.model.status,
+                func.count(self.model.id)
             )
-            .where(Delivery.notification_id == notification_id)
-            .group_by(Delivery.status)
+            .where(self.model.notification_id == notification_id)
+            .group_by(self.model.status)
         )
-        rows = self.session.execute(stmt)
-        stats = {status.value: count for status, count in rows.all()}
+        res = await self.session.execute(stmt)
+        stats = {
+            status.value: count
+            for status, count in res.all()
+        }
         return stats

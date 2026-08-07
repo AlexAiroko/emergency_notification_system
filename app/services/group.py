@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.uow import UnitOfWork
 from app.exceptions.contact import ContactNotFoundError
 from app.exceptions.group import GroupAlreadyExistsError, GroupNotFoundError
+from app.models.contact import Contact
 from app.models.group import Group
 
 
@@ -12,13 +13,42 @@ logger = logging.getLogger(__name__)
 
 
 class GroupService:
-    def create_group(
+    async def _get_group(
+        self,
+        uow: UnitOfWork,
+        group_id: int,
+    ) -> Group:
+        group = await uow.group_repo.get_with_contacts(group_id)
+        
+        if group is None:
+            logger.warning(
+                "Group %s not found",
+                group_id,
+            )
+            raise GroupNotFoundError(group_id)
+
+        return group
+
+    async def _get_contact(
+        self,
+        uow: UnitOfWork,
+        contact_id: int,
+    ) -> Contact:
+        contact = await uow.contact_repo.get(contact_id)
+
+        if contact is None:
+            logger.warning("Contact %s not found", contact_id)
+            raise ContactNotFoundError(contact_id)
+
+        return contact
+
+    async def create_group(
         self,
         uow: UnitOfWork,
         name: str,
     ) -> Group:
         try:
-            group = uow.group_repo.create(name=name)
+            group = await uow.group_repo.create(name=name)
         except IntegrityError as exc:
             logger.warning(
                 "Failed to create group: group with name '%s' already exists",
@@ -34,49 +64,33 @@ class GroupService:
 
         return group
     
-    def get_group(
+    async def get_group(
         self,
         uow: UnitOfWork,
         group_id: int,
     ) -> Group:
-        group = uow.group_repo.get_with_contacts(group_id)
-
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
-
-        return group
+        return await self._get_group(uow, group_id)
     
-    def get_many_groups(
+    async def get_many_groups(
         self,
         uow: UnitOfWork,
         limit: int = 20,
         offset: int = 0,
     ) -> list[Group]:
-        return uow.group_repo.get_many(
+        return await uow.group_repo.get_many(
             limit=limit,
             offset=offset,
         )
     
-    def update_group(
+    async def update_group(
         self,
         uow: UnitOfWork,
         group_id: int,
         name: str,
-    ) -> None:
-        group = uow.group_repo.get(group_id)
+    ) -> Group:
+        await self._get_group(uow, group_id)
 
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
-
-        uow.group_repo.update(
+        updated = await uow.group_repo.update(
             obj_id=group_id,
             name=name,
         )
@@ -85,53 +99,33 @@ class GroupService:
             "Updated group %s",
             group_id,
         )
+
+        return updated
     
-    def delete_group(
+    async def delete_group(
         self,
         uow: UnitOfWork,
         group_id: int,
     ) -> None:
-        group = uow.group_repo.get(group_id)
+        await self._get_group(uow, group_id)
 
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
-
-        uow.group_repo.delete(group_id)
+        await uow.group_repo.delete(group_id)
         
         logger.info(
             "Deleted group %s",
             group_id,
         )
     
-    def add_contact(
+    async def add_contact(
         self,
         uow: UnitOfWork,
         group_id: int,
         contact_id: int,
     ) -> None:
-        group = uow.group_repo.get(group_id)
-
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
+        await self._get_group(uow, group_id)
+        await self._get_contact(uow, contact_id)
         
-        contact = uow.contact_repo.get(contact_id)
-        
-        if contact is None:
-            logger.warning(
-                "Contact %s not found",
-                contact_id,
-            )
-            raise ContactNotFoundError(contact_id)
-        
-        uow.group_repo.add_contact(
+        await uow.group_repo.add_contact(
             group_id=group_id,
             contact_id=contact_id,
         )
@@ -142,31 +136,16 @@ class GroupService:
             group_id,
         )
     
-    def remove_contact(
+    async def remove_contact(
         self,
         uow: UnitOfWork,
         group_id: int,
         contact_id: int,
     ) -> None:
-        group = uow.group_repo.get(group_id)
-
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
+        await self._get_group(uow, group_id)
+        await self._get_contact(uow, contact_id)
         
-        contact = uow.contact_repo.get(contact_id)
-        
-        if contact is None:
-            logger.warning(
-                "Contact %s not found",
-                contact_id,
-            )
-            raise ContactNotFoundError(contact_id)
-        
-        uow.group_repo.remove_contact_from_group(
+        await uow.group_repo.remove_contact_from_group(
             group_id=group_id,
             contact_id=contact_id,
         )
@@ -177,18 +156,10 @@ class GroupService:
             group_id,
         )
     
-    def get_contacts(
+    async def get_contacts(
         self,
         uow: UnitOfWork,
         group_id: int,
-    ):
-        group = uow.group_repo.get(group_id)
-
-        if group is None:
-            logger.warning(
-                "Group %s not found",
-                group_id,
-            )
-            raise GroupNotFoundError(group_id)
-        
-        return uow.group_repo.get_with_contacts(group_id=group_id)
+    ) -> list[Contact]:
+        group = await self._get_group(uow, group_id)
+        return group.contacts

@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 
 class FakeUnitOfWork:
@@ -9,16 +9,17 @@ class FakeUnitOfWork:
         self.group_repo = Mock()
         self.contact_repo = Mock()
         self.contact_method_repo = Mock()
-        
 
-        self.commit = Mock()
-        self.rollback = Mock()
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
 
-    def __enter__(self):
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         if exc_type is None:
-            self.commit()
+            await self.commit()
         else:
-            self.rollback()
+            await self.rollback()
+
+        return False

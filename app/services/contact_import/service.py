@@ -15,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class ContactImportService:
-    def import_contacts(
+    def __init__(self):
+        self.contact_service = ContactService()
+        self.contact_method_service = ContactMethodService()
+
+    async def import_contacts(
         self,
         file: UploadFile,
     ) -> ImportResult:
@@ -27,7 +31,7 @@ class ContactImportService:
         """
         
         parser = ParserFactory.get(file.filename)
-        rows = parser.parse(file)
+        rows = await parser.parse(file)
         
         result = ImportResult(total=len(rows))
 
@@ -39,8 +43,8 @@ class ContactImportService:
 
         for idx, row in enumerate(rows, start=1):
             try:
-                with UnitOfWork() as uow:
-                    imported = self._import_row(uow, row)
+                async with UnitOfWork() as uow: # TODO: Fix creating a new transaction for each row
+                    imported = await self._import_row(uow, row)
 
                 if imported:
                     result.imported += 1
@@ -72,7 +76,7 @@ class ContactImportService:
 
         return result
 
-    def _import_row(self, uow: UnitOfWork, row: dict) -> bool:
+    async def _import_row(self, uow: UnitOfWork, row: dict) -> bool:
         """
         Returns:
         - True -> imported
@@ -81,28 +85,24 @@ class ContactImportService:
 
         if not row.get("name"):
             raise AbsentNameFieldError()
-
-        service = ContactService()
         
-        contact = service.create_contact(
+        contact = await self.contact_service.create_contact(
             uow=uow,
             external_id=row.get("external_id"),
             name=row["name"],
             is_active=True,
         )
 
-        self._create_methods(uow, contact.id, row)
+        await self._create_methods(uow, contact.id, row)
 
         return True
     
-    def _create_methods(
+    async def _create_methods(
             self,
             uow: UnitOfWork,
             contact_id: int,
             row: dict,
     ) -> None:
-        service = ContactMethodService()
-        
         for channel, field in (
             (ChannelType.EMAIL, "email"),
             (ChannelType.TELEGRAM, "telegram"),
@@ -113,7 +113,7 @@ class ContactImportService:
             if not address or not address.strip():
                 continue
 
-            service.create_method(
+            await self.contact_method_service.create_method(
                 uow=uow,
                 contact_id=contact_id,
                 channel=channel,

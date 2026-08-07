@@ -1,12 +1,12 @@
 from unittest.mock import Mock
 
-import pytest
+import pytest_asyncio
 
 from app.services.notification import NotificationService
 
 
-@pytest.fixture
-def notification_service():
+@pytest_asyncio.fixture
+async def notification_service():
     """
     Creates a NotificationService with mocked inner services.
     """

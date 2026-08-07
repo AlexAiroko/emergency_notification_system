@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from app.exceptions.base import AppError
 
 
-def error_handler(
+async def error_handler(
     request: Request,
     exc: AppError,
 ):

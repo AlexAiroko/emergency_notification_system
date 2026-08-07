@@ -1,57 +1,59 @@
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class BaseRepository:
     model = None
     
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    def flush(self) -> None:
-        self.session.flush()
+    async def flush(self) -> None:
+        await self.session.flush()
     
-    def create(self, **kwargs):
+    async def create(self, **kwargs):
         obj = self.model(**kwargs)
         self.session.add(obj)
-        self.flush()
+        await self.flush()
         return obj
     
-    def get(self, obj_id: int):
+    async def get(self, obj_id: int):
         stmt = (
             select(self.model)
             .where(self.model.id == obj_id)
         )
-        res = self.session.execute(stmt)
-        obj = res.scalar_one_or_none()
-        return obj
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
     
-    def get_many(self, limit: int = 20, offset: int = 0):
+    async def get_many(self, limit: int = 20, offset: int = 0):
         stmt = (
             select(self.model)
             .order_by(self.model.id)
             .limit(limit)
             .offset(offset)
         )
-        res = self.session.execute(stmt)
-        objs = list(res.scalars().all())
-        return objs
+        res = await self.session.execute(stmt)
+        return res.scalars().all()
     
-    def update(
+    async def update(
         self,
         obj_id: int,
         **kwargs,
     ):
-        stmt = (
-            update(self.model)
-            .where(self.model.id == obj_id)
-            .values(**kwargs)
-        )
-        self.session.execute(stmt)
+        obj = await self.get(obj_id)
 
-    def delete(self, obj_id: int) -> None:
-        stmt = (
-            delete(self.model)
-            .where(self.model.id == obj_id)
-        )
-        self.session.execute(stmt)
+        if obj is None:
+            return None
+
+        for key, value in kwargs.items():
+            setattr(obj, key, value)
+
+        await self.flush()
+
+        return obj
+
+    async def delete(self, obj_id: int) -> None:
+        obj = await self.get(obj_id)
+
+        if obj is not None:
+            await self.session.delete(obj)

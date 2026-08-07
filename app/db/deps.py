@@ -1,20 +1,16 @@
-from typing import Generator
+from collections.abc import AsyncGenerator
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import session_maker
 from app.db.uow import UnitOfWork
 
 
-def get_session() -> Generator[Session, None, None]:
-    session = session_maker()
-    try:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with session_maker() as session:
         yield session
-    finally:
-        session.close()
 
 
-def get_uow() -> Generator[UnitOfWork, None, None]:
-    with UnitOfWork() as uow:
+async def get_uow() -> AsyncGenerator[UnitOfWork, None]:
+    async with UnitOfWork() as uow:
         yield uow

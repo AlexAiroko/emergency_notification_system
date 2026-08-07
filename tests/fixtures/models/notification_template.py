@@ -1,10 +1,10 @@
-import pytest
+import pytest_asyncio
 
 from app.models.notification_template import NotificationTemplate
 
 
-@pytest.fixture
-def notification_template(db_session):
+@pytest_asyncio.fixture
+async def notification_template(db_session):
     template = NotificationTemplate(
         name="T1",
         subject="Subj",
@@ -12,5 +12,5 @@ def notification_template(db_session):
         is_active=True,
     )
     db_session.add(template)
-    db_session.flush()
+    await db_session.flush()
     return template

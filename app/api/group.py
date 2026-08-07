@@ -18,13 +18,13 @@ router = APIRouter(
     response_model=GroupResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_group(
+async def create_group(
     data: GroupCreate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
     
-    group = service.create_group(
+    group = await service.create_group(
         uow=uow,
         name=data.name,
     )
@@ -36,13 +36,13 @@ def create_group(
     "/{group_id}",
     response_model=GroupWithContactsResponse,
 )
-def get_group(
+async def get_group(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
     
-    group = service.get_group(
+    group = await service.get_group(
         uow=uow,
         group_id=group_id,
     )
@@ -54,13 +54,13 @@ def get_group(
     "",
     response_model=list[GroupResponse],
 )
-def get_groups(
+async def get_groups(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
-    return service.get_many_groups(
+    return await service.get_many_groups(
         uow,
         limit=limit,
         offset=offset,
@@ -71,14 +71,14 @@ def get_groups(
     "/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def update_group(
+async def update_group(
     group_id: int,
     data: GroupUpdate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
 
-    service.update_group(
+    await service.update_group(
         uow=uow,
         group_id=group_id,
         name=data.name,
@@ -89,13 +89,13 @@ def update_group(
     "/{group_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_group(
+async def delete_group(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
 
-    service.delete_group(
+    await service.delete_group(
         uow=uow,
         group_id=group_id,
     )
@@ -105,14 +105,14 @@ def delete_group(
     "/{group_id}/contacts/{contact_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def add_contact_to_group(
+async def add_contact_to_group(
     group_id: int,
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
 
-    service.add_contact(
+    await service.add_contact(
         uow=uow,
         group_id=group_id,
         contact_id=contact_id,
@@ -123,14 +123,14 @@ def add_contact_to_group(
     "/{group_id}/contacts/{contact_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def remove_contact_from_group(
+async def remove_contact_from_group(
     group_id: int,
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
 
-    service.remove_contact(
+    await service.remove_contact(
         uow=uow,
         group_id=group_id,
         contact_id=contact_id,
@@ -141,15 +141,15 @@ def remove_contact_from_group(
     "/{group_id}/contacts",
     response_model=list[ContactResponse],
 )
-def get_group_contacts(
+async def get_group_contacts(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = GroupService()
 
-    group = service.get_contacts(
+    contacts = await service.get_contacts(
         uow=uow,
         group_id=group_id,
     )
 
-    return group.contacts
+    return contacts

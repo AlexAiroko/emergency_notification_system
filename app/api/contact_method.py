@@ -17,14 +17,14 @@ router = APIRouter(
     response_model=ContactMethodResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_method(
+async def create_method(
     contact_id: int,
     data: ContactMethodCreate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactMethodService()
     
-    method = service.create_method(
+    method = await service.create_method(
         uow=uow,
         contact_id=contact_id,
         channel=data.channel,
@@ -38,13 +38,13 @@ def create_method(
     "",
     response_model=list[ContactMethodResponse]
 )
-def get_methods(
+async def get_methods(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactMethodService()
     
-    methods = service.get_methods(
+    methods = await service.get_methods(
         uow=uow,
         contact_id=contact_id,
     )
@@ -56,14 +56,14 @@ def get_methods(
     "/{method_id}",
     response_model=ContactMethodResponse,
 )
-def get_method(
+async def get_method(
     contact_id: int,
     method_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactMethodService()
     
-    method = service.get_method(
+    method = await service.get_method(
         uow=uow,
         contact_id=contact_id,
         method_id=method_id,
@@ -76,7 +76,7 @@ def get_method(
     "/{method_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def update_method(
+async def update_method(
     contact_id: int,
     method_id: int,
     data: ContactMethodUpdate,
@@ -84,7 +84,7 @@ def update_method(
 ):
     service = ContactMethodService()
     
-    service.update_method(
+    await service.update_method(
         uow=uow,
         contact_id=contact_id,
         method_id=method_id,
@@ -98,14 +98,14 @@ def update_method(
     "/{method_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_method(
+async def delete_method(
     contact_id: int,
     method_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = ContactMethodService()
     
-    service.delete_method(
+    await service.delete_method(
         uow=uow,
         contact_id=contact_id,
         method_id=method_id,

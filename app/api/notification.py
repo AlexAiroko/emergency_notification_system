@@ -18,13 +18,13 @@ router = APIRouter(
     response_model=NotificationResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_notification(
+async def create_notification(
     data: NotificationCreate,
     uow: UnitOfWork = Depends(get_uow),
 ):
     service = NotificationService()
     
-    notification = service.create_notification(
+    notification = await service.create_notification(
         uow=uow,
         template_id=data.template_id,
         group_id=data.group_id,
@@ -37,12 +37,12 @@ def create_notification(
     "",
     response_model=list[NotificationResponse],
 )
-def get_notifications(
+async def get_notifications(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.notification_repo.get_many(
+    return await uow.notification_repo.get_many(
         limit=limit,
         offset=offset,
     )
@@ -52,16 +52,20 @@ def get_notifications(
     "/{notification_id}",
     response_model=NotificationResponse,
 )
-def get_notification(
+async def get_notification(
     notification_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.notification_repo.get(notification_id)
+    service = NotificationService()
+    
+    return await service.get_notification(uow, notification_id)
 
+
+# TODO: Add Celery instead of BG Tasks
 @router.post(
     "/{notification_id}",
 )
-def send_notification(
+async def send_notification(
     notification_id: int,
     background_tasks: BackgroundTasks,
 ):
@@ -77,16 +81,16 @@ def send_notification(
     "/{notification_id}/deliveries",
     response_model=list[DeliveryResponse],
 )
-def get_deliveries(
+async def get_deliveries(
     notification_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.delivery_repo.get_by_notification(notification_id)
+    return await uow.delivery_repo.get_by_notification(notification_id)
 
 
 @router.get("/{notification_id}/stats")
-def get_notification_stats(
+async def get_notification_stats(
     notification_id: int,
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return uow.delivery_repo.get_stats(notification_id)
+    return await uow.delivery_repo.get_stats(notification_id)

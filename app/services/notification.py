@@ -1,9 +1,11 @@
 import logging
 
 from app.db.uow import UnitOfWork
+from app.exceptions.notification import NotificationNotFoundError
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.notification import Notification, NotificationStatus
 from app.services.delivery import DeliveryService
+from app.services.group import GroupService
 from app.services.notification_template import NotificationTemplateService
 
 logger = logging.getLogger(__name__)
@@ -12,9 +14,32 @@ logger = logging.getLogger(__name__)
 class NotificationService:
     def __init__(self) -> None:
         self.delivery_service = DeliveryService()
+        self.group_service = GroupService()
         self.template_service = NotificationTemplateService()
 
-    def create_notification(
+    async def _prepare_deliveries(
+        self,
+        contacts,
+        notification_id: int,
+    ) -> list[Delivery]:
+        deliveries = []
+        
+        for contact in contacts:
+            for method in contact.contact_methods:
+                deliveries.append(
+                    Delivery(
+                        notification_id=notification_id,
+                        contact_id=contact.id,
+                        contact_method_id=method.id,
+                        channel=method.channel,
+                        address=method.address,
+                        status=DeliveryStatus.PENDING,
+                    )
+                )
+
+        return deliveries
+
+    async def create_notification(
         self,
         uow: UnitOfWork,
         template_id: int,
@@ -25,12 +50,14 @@ class NotificationService:
         for each ContactMethod of each contact in the group.
         """
 
-        self.template_service.ensure_template_is_active(
+        await self.template_service.ensure_template_is_active(
             uow,
             template_id,
         )
 
-        notification = uow.notification_repo.create(
+        await self.group_service.get_group(uow, group_id)
+
+        notification = await uow.notification_repo.create(
             template_id=template_id,
             group_id=group_id,
         )
@@ -42,7 +69,7 @@ class NotificationService:
             group_id,
         )
 
-        contacts = uow.group_repo.get_contacts_for_dispatch(group_id)
+        contacts = await uow.group_repo.get_contacts_for_dispatch(group_id)
 
         logger.info(
             "Found %s contacts for notification %s",
@@ -50,29 +77,16 @@ class NotificationService:
             notification.id,
         )
 
-        deliveries = []
-
-        for contact in contacts:
-            for method in contact.contact_methods:
-                deliveries.append(
-                    Delivery(
-                        notification_id=notification.id,
-                        contact_id=contact.id,
-                        contact_method_id=method.id,
-                        channel=method.channel,
-                        address=method.address,
-                        status=DeliveryStatus.PENDING,
-                    )
-                )
+        deliveries = await self._prepare_deliveries(contacts, notification.id)
 
         if not deliveries:
             logger.warning(
-                "No deliveries were created for notification %s",
+                "Notification %s has no recipient",
                 notification.id,
             )
             return notification
 
-        uow.delivery_repo.create_bulk(deliveries)
+        await uow.delivery_repo.create_bulk(deliveries)
 
         logger.info(
             "Prepared %s deliveries for notification %s",
@@ -82,18 +96,7 @@ class NotificationService:
 
         return notification
 
-    def start_notification(
-        self,
-        uow: UnitOfWork,
-        notification_id: int,
-    ) -> None:
-        """
-        Sets the notification to IN_PROGRESS.
-        """
-        
-        uow.notification_repo.mark_started(notification_id)
-
-    def send_notification(
+    async def send_notification(
         self,
         uow: UnitOfWork,
         notification_id: int,
@@ -110,27 +113,41 @@ class NotificationService:
             notification_id,
         )
 
-        self.start_notification(
-            uow,
-            notification_id,
-        )
+        notification = await uow.notification_repo.get(notification_id)
 
-        self.delivery_service.send_pending(
-            uow,
-            notification_id,
-        )
+        if notification is None:
+            logger.warning(
+                "Notification %s not found",
+                notification_id,
+            )
+            raise NotificationNotFoundError(notification_id)
 
-        self.finalize_notification(
-            uow,
-            notification_id,
-        )
+
+        await uow.notification_repo.mark_started(notification_id)
+
+        try:
+            await self.delivery_service.send_pending(
+                uow,
+                notification_id,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error while sending notification %s",
+                notification_id,
+            )
+            raise
+        finally:
+            await self.finalize_notification(
+                uow,
+                notification_id,
+            )
 
         logger.info(
             "Finished sending notification %s",
             notification_id,
         )
 
-    def finalize_notification(
+    async def finalize_notification(
         self,
         uow: UnitOfWork,
         notification_id: int,
@@ -144,7 +161,7 @@ class NotificationService:
         - part SENT and part FAILED -> PARTIAL_SUCCESS
         """
 
-        stats = uow.delivery_repo.get_stats(notification_id)
+        stats = await uow.delivery_repo.get_stats(notification_id)
 
         sent = stats.get("sent", 0)
         failed = stats.get("failed", 0)
@@ -165,7 +182,7 @@ class NotificationService:
         else:
             status = NotificationStatus.PARTIAL_SUCCESS
 
-        uow.notification_repo.update_status(
+        await uow.notification_repo.update_status(
             notification_id,
             status,
         )
@@ -177,3 +194,19 @@ class NotificationService:
             sent,
             failed,
         )
+
+    async def get_notification(
+        self,
+        uow: UnitOfWork,
+        notification_id: int,
+    ) -> Notification:
+        notification = await uow.notification_repo.get_with_relations(notification_id)
+
+        if notification is None:
+            logger.warning(
+                "Notification %s not found",
+                notification_id,
+            )
+            raise NotificationNotFoundError(notification_id)
+
+        return notification

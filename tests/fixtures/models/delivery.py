@@ -5,7 +5,7 @@ from app.models.delivery import Delivery, DeliveryStatus
 
 @pytest.fixture
 def delivery_factory(db_session):
-    def create(**kwargs):
+    async def create(**kwargs):
         delivery = Delivery(
             notification_id=kwargs["notification_id"],
             contact_id=kwargs["contact_id"],
@@ -16,7 +16,7 @@ def delivery_factory(db_session):
         )
 
         db_session.add(delivery)
-        db_session.flush()
+        await db_session.flush()
         return delivery
 
     return create

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, Depends, status
 
 from app.db.deps import get_uow
 from app.db.uow import UnitOfWork
@@ -61,18 +61,13 @@ async def get_notification(
     return await service.get_notification(uow, notification_id)
 
 
-# TODO: Add Celery instead of BG Tasks
 @router.post(
     "/{notification_id}",
 )
-async def send_notification(
+def send_notification(
     notification_id: int,
-    background_tasks: BackgroundTasks,
 ):
-    background_tasks.add_task(
-        send_notification_task,
-        notification_id,
-    )
+    send_notification_task.delay(notification_id)
     
     return {"message": "Notification started"}
 

@@ -1,5 +1,7 @@
 import logging
 
+from app.celery_app import celery_app
+from app.core.async_utils import run_async
 from app.db.uow import UnitOfWork
 from app.services.notification import NotificationService
 
@@ -7,9 +9,9 @@ from app.services.notification import NotificationService
 logger = logging.getLogger(__name__)
 
 
-async def send_notification_task(notification_id: int):
+async def _send_notification(notification_id: int):
     logger.info(
-        "Background task started (notification_id=%s)",
+        "Celery task started (notification_id=%s)",
         notification_id,
     )
 
@@ -21,13 +23,18 @@ async def send_notification_task(notification_id: int):
             )
 
         logger.info(
-            "Background task finished successfully (notification_id=%s)",
+            "Celery task finished successfully (notification_id=%s)",
             notification_id,
         )
 
-    except Exception as exc:
+    except Exception:
         logger.exception(
-            "Background task failed (notification_id=%s)",
+            "Celery task failed (notification_id=%s)",
             notification_id,
         )
         raise
+
+
+@celery_app.task
+def send_notification_task(notification_id: int):
+    run_async(_send_notification(notification_id))

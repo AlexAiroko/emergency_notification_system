@@ -52,4 +52,7 @@ class Settings(BaseSettings):
     
     TELEGRAM_BOT_TOKEN: str
 
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+
 settings = Settings()

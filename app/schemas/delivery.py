@@ -16,6 +16,6 @@ class DeliveryResponse(BaseModel):
     channel: ChannelType
     address: str
     status: DeliveryStatus
-    provider_message_id: int | None
+    provider_message_id: str | None
     error_message: str | None
     sent_at: datetime | None

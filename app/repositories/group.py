@@ -45,4 +45,4 @@ class GroupRepository(ActiveRepository):
             .options(selectinload(Contact.contact_methods))
         )
         res = await self.session.execute(stmt)
-        return res.scalars().all()
+        return list(res.scalars().all())

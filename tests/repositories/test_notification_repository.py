@@ -1,7 +1,6 @@
 import pytest
 
 from app.models.notification import NotificationStatus
-from app.repositories.notification import NotificationRepository
 
 
 @pytest.mark.asyncio

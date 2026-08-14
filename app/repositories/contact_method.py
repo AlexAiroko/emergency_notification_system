@@ -14,7 +14,7 @@ class ContactMethodRepository(ActiveRepository):
             .order_by(self.model.id)
         )
         res = await self.session.execute(stmt)
-        return res.scalars().all()
+        return list(res.scalars().all())
 
     async def get_by_contact_and_channel(
             self,
@@ -30,4 +30,4 @@ class ContactMethodRepository(ActiveRepository):
             .order_by(self.model.id)
         )
         res = await self.session.execute(stmt)
-        return res.scalars().all()
+        return list(res.scalars().all())

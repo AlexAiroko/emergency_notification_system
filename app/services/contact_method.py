@@ -1,8 +1,6 @@
 import logging
 
 from app.db.uow import UnitOfWork
-from app.exceptions.base import ValidationError
-from app.exceptions.contact import ContactNotFoundError
 from app.exceptions.contact_method import ContactMethodNotFoundError
 from app.models.contact_method import ChannelType, ContactMethod
 from app.services.contact import ContactService

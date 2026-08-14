@@ -4,7 +4,7 @@ class ImportResult:
         total: int = 0,
         imported: int = 0,
         skipped: int = 0,
-        errors: list[dict] | None = None,
+        errors: list[dict[str, str | int]] | None = None,
     ):
         self.total = total
         self.imported = imported

@@ -99,7 +99,7 @@ async def test_update_contact_success(contact_service, uow):
 async def test_update_contact_not_found(contact_service, uow):
     uow.contact_repo.update = AsyncMock(return_value=None)
 
-    with pytest.raises(ContactNotFoundError) as exc:
+    with pytest.raises(ContactNotFoundError):
         await contact_service.update_contact(
             uow=uow,
             contact_id=999,

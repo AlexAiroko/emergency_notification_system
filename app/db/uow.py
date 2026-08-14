@@ -65,5 +65,5 @@ class UnitOfWork:
 
         return repo
     
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> BaseRepository:
         return self._get_repository(name)

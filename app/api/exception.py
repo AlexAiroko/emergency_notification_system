@@ -7,7 +7,7 @@ from app.exceptions.base import AppError
 async def error_handler(
     request: Request,
     exc: AppError,
-):
+) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={

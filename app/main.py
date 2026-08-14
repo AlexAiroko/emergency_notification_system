@@ -21,7 +21,7 @@ app.include_router(notification_router)
 
 app.add_exception_handler(
     AppError,
-    error_handler,
+    error_handler, # type: ignore[arg-type]
 )
 
 

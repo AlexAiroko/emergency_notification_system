@@ -17,7 +17,7 @@ class DeliveryRepository(BaseRepository):
             .where(self.model.notification_id == notification_id)
         )
         res = await self.session.execute(stmt)
-        return res.scalars().all()
+        return list(res.scalars().all())
     
     async def update_status(
         self,

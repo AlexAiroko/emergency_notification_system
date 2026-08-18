@@ -165,17 +165,23 @@ class NotificationService:
 
         sent = stats.get("sent", 0)
         failed = stats.get("failed", 0)
-
+        pending = stats.get("pending", 0)
         total = sent + failed
+
+        if pending > 0:
+            logger.warning(
+                "Notification %s has %s pending deliveries, skipping finalization",
+                notification_id, pending,
+            )
+            return
 
         if total == 0:
             logger.warning(
                 "Finished notification %s without deliveries",
                 notification_id,
             )
-            return
-
-        if sent == total:
+            status = NotificationStatus.SUCCESS
+        elif sent == total:
             status = NotificationStatus.SUCCESS
         elif failed == total:
             status = NotificationStatus.FAILED

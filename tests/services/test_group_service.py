@@ -50,7 +50,7 @@ async def test_create_group_already_exists(group_service, uow):
 async def test_get_group(group_service, uow):
     group = SimpleNamespace(id=1)
 
-    uow.group_repo.get = AsyncMock(return_value=group)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=group)
 
     result = await group_service.get_group(
         uow,
@@ -59,12 +59,12 @@ async def test_get_group(group_service, uow):
 
     assert result is group
 
-    uow.group_repo.get.assert_called_once_with(1)
+    uow.group_repo.get_with_contacts.assert_awaited_once_with(1)
 
 
 @pytest.mark.asyncio
 async def test_get_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
 
     with pytest.raises(
         GroupNotFoundError,
@@ -104,7 +104,7 @@ async def test_update_group(group_service, uow):
     group = SimpleNamespace(id=1)
     updated = SimpleNamespace(id=1, name="Updated")
 
-    uow.group_repo.get = AsyncMock(return_value=group)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=group)
     uow.group_repo.update = AsyncMock(return_value=updated)
 
     result = await group_service.update_group(
@@ -123,7 +123,7 @@ async def test_update_group(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_update_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
     uow.group_repo.update = AsyncMock()
 
     with pytest.raises(
@@ -141,7 +141,7 @@ async def test_update_group_not_found(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_delete_group(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.group_repo.delete = AsyncMock()
 
     await group_service.delete_group(
@@ -154,7 +154,7 @@ async def test_delete_group(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_delete_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
     uow.group_repo.delete = AsyncMock()
 
     with pytest.raises(
@@ -171,7 +171,7 @@ async def test_delete_group_not_found(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_add_contact(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.contact_repo.get = AsyncMock(return_value=SimpleNamespace(id=100))
     uow.group_repo.add_contact = AsyncMock()
 
@@ -189,7 +189,7 @@ async def test_add_contact(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_add_contact_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
     uow.group_repo.add_contact = AsyncMock()
 
     with pytest.raises(
@@ -207,7 +207,7 @@ async def test_add_contact_group_not_found(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_add_contact_contact_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.contact_repo.get = AsyncMock(return_value=None)
     uow.group_repo.add_contact = AsyncMock()
 
@@ -226,7 +226,7 @@ async def test_add_contact_contact_not_found(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_remove_contact(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.contact_repo.get = AsyncMock(return_value=SimpleNamespace(id=100))
     uow.group_repo.remove_contact_from_group = AsyncMock()
 
@@ -244,7 +244,7 @@ async def test_remove_contact(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_remove_contact_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
     uow.group_repo.remove_contact_from_group = AsyncMock()
 
     with pytest.raises(
@@ -262,7 +262,7 @@ async def test_remove_contact_group_not_found(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_remove_contact_contact_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.contact_repo.get = AsyncMock(return_value=None)
     uow.group_repo.remove_contact_from_group = AsyncMock()
 
@@ -288,7 +288,7 @@ async def test_get_contacts(group_service, uow):
         contacts=contacts,
     )
 
-    uow.group_repo.get = AsyncMock(return_value=group)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=group)
 
     result = await group_service.get_contacts(
         uow,
@@ -300,7 +300,7 @@ async def test_get_contacts(group_service, uow):
 
 @pytest.mark.asyncio
 async def test_get_contacts_group_not_found(group_service, uow):
-    uow.group_repo.get = AsyncMock(return_value=None)
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
 
     with pytest.raises(
         GroupNotFoundError,

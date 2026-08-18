@@ -30,7 +30,7 @@ async def test_create_notification(notification_service, uow):
         contact_methods=[email, telegram],
     )
 
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=7))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=7))
     uow.notification_repo.create = AsyncMock(return_value=notification)
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
@@ -50,7 +50,7 @@ async def test_create_notification(notification_service, uow):
         5,
     )
 
-    uow.group_repo.get.assert_awaited_once_with(7)
+    uow.group_repo.get_with_contacts.assert_awaited_once_with(7)
 
     uow.notification_repo.create.assert_awaited_once_with(
         template_id=5,
@@ -81,7 +81,7 @@ async def test_create_notification(notification_service, uow):
 async def test_create_notification_without_contacts(notification_service, uow):
     notification = SimpleNamespace(id=1)
 
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.notification_repo.create = AsyncMock(return_value=notification)
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[])
     uow.delivery_repo.create_bulk = AsyncMock()
@@ -108,7 +108,7 @@ async def test_create_notification_with_contact_without_methods(notification_ser
         contact_methods=[],
     )
 
-    uow.group_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=1))
     uow.notification_repo.create = AsyncMock(return_value=notification)
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
@@ -172,6 +172,7 @@ async def test_send_notification_not_found(notification_service, uow):
         ({"failed": 3}, NotificationStatus.FAILED),
         ({"sent": 2, "failed": 1}, NotificationStatus.PARTIAL_SUCCESS),
         ({"sent": 1, "failed": 1}, NotificationStatus.PARTIAL_SUCCESS),
+        ({"sent": 3, "pending": 0}, NotificationStatus.SUCCESS),
     ],
 )
 async def test_finalize_notification(
@@ -197,7 +198,7 @@ async def test_finalize_notification(
 
 
 @pytest.mark.asyncio
-async def test_finalize_notification_no_deliveries(notification_service, uow):
+async def test_finalize_notification_no_deliveries_marks_success(notification_service, uow):
     uow.delivery_repo.get_stats = AsyncMock(return_value={})
     uow.notification_repo.update_status = AsyncMock()
 
@@ -207,6 +208,29 @@ async def test_finalize_notification_no_deliveries(notification_service, uow):
     )
 
     uow.delivery_repo.get_stats.assert_awaited_once_with(1)
+
+    uow.notification_repo.update_status.assert_awaited_once_with(
+        1,
+        NotificationStatus.SUCCESS,
+    )
+
+
+@pytest.mark.asyncio
+async def test_finalize_notification_skips_when_pending_deliveries(notification_service, uow):
+    uow.delivery_repo.get_stats = AsyncMock(return_value={"sent": 1, "pending": 2})
+    uow.notification_repo.update_status = AsyncMock()
+
+    await notification_service.finalize_notification(uow, 1)
+
+    uow.notification_repo.update_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_finalize_notification_skips_when_only_pending(notification_service, uow):
+    uow.delivery_repo.get_stats = AsyncMock(return_value={"pending": 3})
+    uow.notification_repo.update_status = AsyncMock()
+
+    await notification_service.finalize_notification(uow, 1)
 
     uow.notification_repo.update_status.assert_not_called()
 

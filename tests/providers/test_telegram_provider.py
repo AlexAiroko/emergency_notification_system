@@ -9,20 +9,20 @@ from app.providers.telegram import TelegramProvider
 
 @pytest.mark.asyncio
 async def test_telegram_send_success():
-    provider = TelegramProvider(token="fake-token")
-
-    response = Mock()
-    response.raise_for_status = Mock()
-    response.json.return_value = {
-        "ok": True,
-        "result": {"message_id": 123},
-    }
-
     with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
         client = AsyncMock()
+
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "ok": True,
+            "result": {"message_id": 123},
+        }
         client.post.return_value = response
 
-        client_cls.return_value.__aenter__.return_value = client
+        client_cls.return_value = client
+
+        provider = TelegramProvider(token="fake-token")
 
         message_id = await provider.send(
             to="123456",
@@ -46,20 +46,20 @@ async def test_telegram_send_success():
 
 @pytest.mark.asyncio
 async def test_telegram_api_error():
-    provider = TelegramProvider(token="fake-token")
-
-    response = Mock()
-    response.raise_for_status = Mock()
-    response.json.return_value = {
-        "ok": False,
-        "description": "Bad Request",
-    }
-
     with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
         client = AsyncMock()
+
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "ok": False,
+            "description": "Bad Request",
+        }
         client.post.return_value = response
 
-        client_cls.return_value.__aenter__.return_value = client
+        client_cls.return_value = client
+
+        provider = TelegramProvider(token="fake-token")
 
         with pytest.raises(ProviderError, match="Telegram API error"):
             await provider.send(
@@ -70,13 +70,13 @@ async def test_telegram_api_error():
 
 @pytest.mark.asyncio
 async def test_telegram_http_error():
-    provider = TelegramProvider(token="fake-token")
-
     with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
         client = AsyncMock()
         client.post.side_effect = httpx.ConnectError("Connection failed")
 
-        client_cls.return_value.__aenter__.return_value = client
+        client_cls.return_value = client
+
+        provider = TelegramProvider(token="fake-token")
 
         with pytest.raises(ProviderError, match="Telegram send failed"):
             await provider.send(
@@ -87,20 +87,20 @@ async def test_telegram_http_error():
 
 @pytest.mark.asyncio
 async def test_telegram_without_subject():
-    provider = TelegramProvider(token="fake-token")
-
-    response = Mock()
-    response.raise_for_status = Mock()
-    response.json.return_value = {
-        "ok": True,
-        "result": {"message_id": 10},
-    }
-
     with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
         client = AsyncMock()
+
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "ok": True,
+            "result": {"message_id": 10},
+        }
         client.post.return_value = response
 
-        client_cls.return_value.__aenter__.return_value = client
+        client_cls.return_value = client
+
+        provider = TelegramProvider(token="fake-token")
 
         message_id = await provider.send(
             to="123",
@@ -111,3 +111,16 @@ async def test_telegram_without_subject():
 
         payload = client.post.call_args.kwargs["json"]
         assert payload["text"] == "Only body"
+
+
+@pytest.mark.asyncio
+async def test_telegram_close_closes_client():
+    with patch("app.providers.telegram.httpx.AsyncClient") as client_cls:
+        client = AsyncMock()
+        client_cls.return_value = client
+
+        provider = TelegramProvider(token="fake-token")
+
+        await provider.close()
+
+        client.aclose.assert_awaited_once()

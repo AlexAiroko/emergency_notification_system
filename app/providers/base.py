@@ -32,3 +32,7 @@ class BaseProvider(ABC):
             ProviderError: if the sending failed.
         """
         raise NotImplementedError
+
+    async def close(self) -> None:
+        """Releases the provider's client/connection."""
+        return None

@@ -13,6 +13,27 @@ logger = logging.getLogger(__name__)
 
 
 class EmailProvider(BaseProvider):
+    def __init__(self) -> None:
+        self._smtp: aiosmtplib.SMTP | None = None
+
+    async def _ensure_connection(self) -> aiosmtplib.SMTP:
+        if self._smtp is None:
+            self._smtp = aiosmtplib.SMTP(
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
+                timeout=30,
+            )
+
+        if not self._smtp.is_connected:
+            await self._smtp.connect()
+            if settings.SMTP_USE_TLS:
+                logger.info("Starting TLS for email delivery")
+                await self._smtp.starttls()
+            logger.info("Authenticating SMTP user=%s", settings.SMTP_USERNAME)
+            await self._smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+
+        return self._smtp
+
     async def send(
         self,
         to: str,
@@ -34,23 +55,7 @@ class EmailProvider(BaseProvider):
         message.set_content(body)
 
         try:
-            smtp = aiosmtplib.SMTP(
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                timeout=30,
-            )
-
-            await smtp.connect()
-
-            if settings.SMTP_USE_TLS:
-                logger.info("Starting TLS for email delivery")
-                await smtp.starttls()
-
-            logger.info("Authenticating SMTP user=%s", settings.SMTP_USERNAME)
-            await smtp.login(
-                settings.SMTP_USERNAME,
-                settings.SMTP_PASSWORD,
-            )
+            smtp = await self._ensure_connection()
 
             await smtp.send_message(message)
 
@@ -66,12 +71,14 @@ class EmailProvider(BaseProvider):
             return message["Message-ID"]
 
         except Exception as exc:
+            self._smtp = None
             logger.exception(
                 "Failed to send email (to=%s)",
                 to,
             )
             raise ProviderError(str(exc)) from exc
 
-        finally:
-            if smtp.is_connected:
-                await smtp.quit()
+    async def close(self) -> None:
+        if self._smtp is not None and self._smtp.is_connected:
+            await self._smtp.quit()
+        self._smtp = None

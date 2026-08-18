@@ -10,7 +10,7 @@ class ProviderRegistry:
         # A list of available providers.
         # To add a new channel (e.g., WhatsApp),
         # add an object for this channel to this dictionary.
-        self._providers = {
+        self._providers: dict[str, BaseProvider] = {
             "email": EmailProvider(),
             "telegram": TelegramProvider(settings.TELEGRAM_BOT_TOKEN),
         }
@@ -25,3 +25,7 @@ class ProviderRegistry:
             raise ProviderError(f"No provider registered for channel {channel}")
 
         return provider
+
+    async def close_all(self) -> None:
+        for provider in self._providers.values():
+            await provider.close()

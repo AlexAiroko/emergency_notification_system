@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 async def _send_notification(notification_id: int):
+    service = NotificationService()
+
     logger.info(
         "Celery task started (notification_id=%s)",
         notification_id,
@@ -17,7 +19,7 @@ async def _send_notification(notification_id: int):
 
     try:
         async with UnitOfWork() as uow:
-            await NotificationService().send_notification(
+            await service.send_notification(
                 uow=uow,
                 notification_id=notification_id,
             )
@@ -33,6 +35,8 @@ async def _send_notification(notification_id: int):
             notification_id,
         )
         raise
+    finally:
+        await service.delivery_service.provider_registry.close_all()
 
 
 @celery_app.task

@@ -12,6 +12,7 @@ class TelegramProvider(BaseProvider):
     def __init__(self, token: str) -> None:
         self.token = token
         self.base_url = f"https://api.telegram.org/bot{self.token}"
+        self._client = httpx.AsyncClient(timeout=10)
 
     async def send(
         self, 
@@ -31,13 +32,10 @@ class TelegramProvider(BaseProvider):
         }
 
         try:
-            # TODO: Use one common client for the entire app. 
-            # Not create a new client for each request
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.post(
-                    url=f"{self.base_url}/sendMessage",
-                    json=payload,
-                )
+            response = await self._client.post(
+                url=f"{self.base_url}/sendMessage",
+                json=payload,
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -78,3 +76,6 @@ class TelegramProvider(BaseProvider):
         if subject:
             return f"<b>{subject}</b>\n\n{body}"
         return body
+
+    async def close(self) -> None:
+        await self._client.aclose()

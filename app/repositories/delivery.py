@@ -1,4 +1,6 @@
-from sqlalchemy import func, select
+from datetime import datetime
+
+from sqlalchemy import func, select, update
 
 from app.models.delivery import Delivery, DeliveryStatus
 from app.repositories.base import BaseRepository
@@ -66,3 +68,23 @@ class DeliveryRepository(BaseRepository):
             for status, count in res.all()
         }
         return stats
+
+    async def mark_retry(
+        self,
+        delivery_id: int,
+        next_attempt_at: datetime,
+        error_message: str,
+    ) -> None:
+        stmt = (
+            update(self.model)
+            .values(
+                status=DeliveryStatus.PENDING,
+                attempts=Delivery.attempts + 1,
+                next_attempt_at=next_attempt_at,
+                error_message=error_message,
+            )
+            .where(self.model.id == delivery_id)
+        )
+
+        await self.session.execute(stmt)
+        await self.flush()

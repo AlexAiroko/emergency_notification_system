@@ -17,6 +17,7 @@ async def test_send_success(delivery_service, uow):
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        attempts=0,
     )
 
     notification = SimpleNamespace(
@@ -100,6 +101,7 @@ async def test_send_provider_error(delivery_service, uow):
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        attempts=0,
     )
 
     notification = SimpleNamespace(
@@ -120,6 +122,51 @@ async def test_send_provider_error(delivery_service, uow):
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
     uow.delivery_repo.mark_sent = AsyncMock()
     uow.delivery_repo.mark_failed = AsyncMock()
+    uow.delivery_repo.mark_retry = AsyncMock()
+
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=template,
+    )
+    delivery_service.provider_registry.get = Mock(return_value=provider)
+
+    await delivery_service.send_delivery(uow, 1)
+
+    uow.delivery_repo.mark_retry.assert_awaited_once()
+    assert uow.delivery_repo.mark_retry.call_args.kwargs["error_message"] == "SMTP failed"
+
+    uow.delivery_repo.mark_failed.assert_not_called()
+    uow.delivery_repo.mark_sent.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_provider_error_retries_exhausted(delivery_service, uow):
+    delivery = SimpleNamespace(
+        id=1,
+        notification_id=10,
+        channel=ChannelType.EMAIL,
+        address="user@mail.com",
+        attempts=5,
+    )
+
+    notification = SimpleNamespace(
+        template_id=100,
+    )
+
+    template = SimpleNamespace(
+        subject="Subject",
+        body="Body",
+    )
+
+    provider = Mock()
+    provider.send = AsyncMock(
+        side_effect=ProviderError("SMTP failed"),
+    )
+
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.delivery_repo.mark_sent = AsyncMock()
+    uow.delivery_repo.mark_failed = AsyncMock()
+    uow.delivery_repo.mark_retry = AsyncMock()
 
     delivery_service.template_service.ensure_template_is_active = AsyncMock(
         return_value=template,
@@ -133,6 +180,7 @@ async def test_send_provider_error(delivery_service, uow):
         error_message="SMTP failed",
     )
 
+    uow.delivery_repo.mark_retry.assert_not_called()
     uow.delivery_repo.mark_sent.assert_not_called()
 
 

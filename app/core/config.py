@@ -55,4 +55,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
 
+    RETRY_COUNT: int
+    RETRY_INTERVAL_SECONDS: int
+
 settings = Settings()

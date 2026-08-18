@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta, timezone
 import logging
 
+from app.core.config import settings
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
@@ -92,15 +94,25 @@ class DeliveryService:
             )
 
         except ProviderError as exc:
-            await uow.delivery_repo.mark_failed(
-                delivery.id,
-                error_message=str(exc),
-            )
-
-            logger.exception(
-                "Failed delivery %s",
-                delivery.id,
-            )
+            if delivery.attempts < settings.RETRY_COUNT:
+                next_attempt_at = (
+                    datetime.now(timezone.utc) + 
+                    timedelta(seconds=settings.RETRY_INTERVAL_SECONDS)
+                )
+                await uow.delivery_repo.mark_retry(delivery.id, next_attempt_at, error_message=str(exc))
+                logger.info(
+                    "Delivery %s scheduled retry (attempt %s/%s)",
+                    delivery.id, delivery.attempts + 1, settings.RETRY_COUNT
+                )
+            else:
+                await uow.delivery_repo.mark_failed(
+                    delivery.id,
+                    error_message=str(exc),
+                )
+                logger.exception(
+                    "Failed delivery %s",
+                    delivery.id,
+                )
 
     async def send_pending(
         self,

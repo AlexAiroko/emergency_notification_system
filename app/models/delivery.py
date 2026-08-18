@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -80,6 +80,18 @@ class Delivery(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    next_attempt_at: Mapped[DateTime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     
     notification = relationship("Notification")
     contact = relationship("Contact")
@@ -87,4 +99,5 @@ class Delivery(Base):
 
     __table_args__ = (
         Index("ix_delivery_notification_status", "notification_id", "status"),
+        Index("ix_delivery_status_next_attempt", "status", "next_attempt_at"),
     )

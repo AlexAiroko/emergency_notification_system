@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.models.delivery import Delivery, DeliveryStatus
@@ -209,3 +211,53 @@ async def test_get_stats(
 
     assert stats["sent"] == 2
     assert stats["failed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_mark_retry(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    delivery = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+
+    await delivery_repo.mark_retry(delivery.id, next_attempt_at, "network error")
+
+    updated = (await delivery_repo.get_by_notification(notification.id))[0]
+
+    assert updated.status == DeliveryStatus.PENDING
+    assert updated.attempts == 1
+    assert updated.next_attempt_at is not None
+    assert updated.error_message == "network error"
+
+
+@pytest.mark.asyncio
+async def test_mark_retry_increments_attempts(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    delivery = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    later = datetime.now(timezone.utc) + timedelta(minutes=1)
+
+    await delivery_repo.mark_retry(delivery.id, later, "fail 1")
+    await delivery_repo.mark_retry(delivery.id, later, "fail 2")
+
+    updated = (await delivery_repo.get_by_notification(notification.id))[0]
+
+    assert updated.attempts == 2

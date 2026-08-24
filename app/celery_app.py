@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 from kombu import Queue
 
@@ -11,6 +13,7 @@ celery_app = Celery(
     include=[
         "app.tasks.notification",
         "app.tasks.delivery",
+        "app.tasks.sweeper",
     ],
 )
 
@@ -34,4 +37,11 @@ celery_app.conf.update(
     task_acks_on_failure_or_timeout=False,
     task_time_limit=600,
     task_soft_time_limit=540,
+
+    beat_schedule={
+        "sweep-deliveries": {
+            "task": "app.tasks.sweeper.sweep_deliveries_task",
+            "schedule": timedelta(seconds=settings.SWEEP_INTERVAL_SECONDS),
+        },
+    },
 )

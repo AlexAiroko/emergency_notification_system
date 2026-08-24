@@ -1,6 +1,8 @@
+from datetime import timedelta
 import logging
 
 from app.core.config import settings
+from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
 from app.exceptions.notification import NotificationNotFoundError
 from app.models.delivery import Delivery, DeliveryStatus
@@ -119,12 +121,7 @@ class NotificationService:
         notification_id: int,
     ) -> list[list[int]]:
         delivery_ids = await uow.delivery_repo.get_ready_for_dispatch(notification_id)
-
-        batches = [
-            delivery_ids[i: i + settings.DELIVERY_BATCH_SIZE]
-            for i in range(0, len(delivery_ids), settings.DELIVERY_BATCH_SIZE)
-        ]
-
+        batches = chunk(delivery_ids, settings.DELIVERY_BATCH_SIZE)
         return batches
 
     async def finalize_notification(
@@ -196,3 +193,24 @@ class NotificationService:
             raise NotificationNotFoundError(notification_id)
 
         return notification
+
+    async def claim_due_retries(self, uow: UnitOfWork) -> dict[int, list[int]]:
+        """Captures mature retries, groups them by notification_id."""
+
+        next_attempt_at = utc_now() + timedelta(
+            seconds=settings.RETRY_INTERVAL_SECONDS,
+        )
+
+        deliveries = await uow.delivery_repo.claim_deliveries_for_retry(next_attempt_at)
+
+        groups: dict[int, list[int]] = {}
+        for delivery in deliveries:
+            groups.setdefault(delivery.notification_id, []).append(delivery.id)
+        return groups
+
+    async def finalize_stuck_notifications(self, uow: UnitOfWork) -> int:
+        stuck = await uow.notification_repo.get_stuck_in_progress_ids()
+        for notification_id in stuck:
+            await self.finalize_notification(uow, notification_id)
+        return len(stuck)
+

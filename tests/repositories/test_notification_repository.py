@@ -1,5 +1,9 @@
+from datetime import timedelta
+
 import pytest
 
+from app.core.utils import utc_now
+from app.models.delivery import DeliveryStatus
 from app.models.notification import NotificationStatus
 
 
@@ -126,3 +130,122 @@ async def test_update_status_direct(
 async def test_mark_started_non_existing(method_name, notification_repo):
     # Method shouldn't throw an exception
     await getattr(notification_repo, method_name)(999999)
+
+
+@pytest.mark.asyncio
+async def test_get_stuck_in_progress_ids_includes_without_deliveries(
+    notification_template,
+    group,
+    notification_repo,
+):
+    notification = await notification_repo.create(
+        template_id=notification_template.id,
+        group_id=group.id,
+    )
+
+    await notification_repo.mark_started(notification.id)
+
+    stuck = await notification_repo.get_stuck_in_progress_ids()
+
+    assert stuck == [notification.id]
+
+
+@pytest.mark.asyncio
+async def test_get_stuck_in_progress_ids_excludes_with_pending_delivery(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    notification_repo,
+):
+    await notification_repo.mark_started(notification.id)
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.PENDING,
+    )
+
+    stuck = await notification_repo.get_stuck_in_progress_ids()
+
+    assert stuck == []
+
+
+@pytest.mark.asyncio
+async def test_get_stuck_in_progress_ids_excludes_future_pending_delivery(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    notification_repo,
+):
+    await notification_repo.mark_started(notification.id)
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.PENDING,
+        next_attempt_at=utc_now() + timedelta(minutes=5),
+    )
+
+    stuck = await notification_repo.get_stuck_in_progress_ids()
+
+    assert stuck == []
+
+
+@pytest.mark.asyncio
+async def test_get_stuck_in_progress_ids_includes_with_terminal_deliveries(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    notification_repo,
+):
+    await notification_repo.mark_started(notification.id)
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.SENT,
+    )
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.FAILED,
+    )
+
+    stuck = await notification_repo.get_stuck_in_progress_ids()
+
+    assert stuck == [notification.id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [
+        NotificationStatus.PENDING,
+        NotificationStatus.SUCCESS,
+        NotificationStatus.FAILED,
+    ],
+)
+async def test_get_stuck_in_progress_ids_excludes_other_statuses(
+    notification_template,
+    group,
+    status,
+    notification_repo,
+):
+    notification = await notification_repo.create(
+        template_id=notification_template.id,
+        group_id=group.id,
+    )
+
+    await notification_repo.update_status(notification.id, status)
+
+    stuck = await notification_repo.get_stuck_in_progress_ids()
+
+    assert stuck == []

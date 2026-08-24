@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.core.utils import utc_now
 from app.exceptions.notification import NotificationNotFoundError
 from app.models.contact_method import ChannelType
 from app.models.delivery import DeliveryStatus
@@ -260,3 +261,71 @@ async def test_create_notification_propagates_template_validation_error(
     uow.notification_repo.create.assert_not_called()
     uow.group_repo.get_contacts_for_dispatch.assert_not_called()
     uow.delivery_repo.create_bulk.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_claim_due_retries_groups_by_notification(notification_service, uow):
+    d1 = SimpleNamespace(id=11, notification_id=100)
+    d2 = SimpleNamespace(id=12, notification_id=100)
+    d3 = SimpleNamespace(id=13, notification_id=200)
+
+    uow.delivery_repo.claim_deliveries_for_retry = AsyncMock(
+        return_value=[d1, d2, d3],
+    )
+
+    with patch("app.services.notification.settings.RETRY_INTERVAL_SECONDS", 30):
+        before = utc_now()
+        groups = await notification_service.claim_due_retries(uow)
+        after = utc_now()
+
+    assert groups == {
+        100: [11, 12],
+        200: [13],
+    }
+
+    uow.delivery_repo.claim_deliveries_for_retry.assert_awaited_once()
+
+    next_attempt_at = uow.delivery_repo.claim_deliveries_for_retry.call_args.args[0]
+
+    delta = (next_attempt_at - before).total_seconds()
+    assert 29 <= delta <= 31
+    assert next_attempt_at > after
+
+
+@pytest.mark.asyncio
+async def test_claim_due_retries_empty(notification_service, uow):
+    uow.delivery_repo.claim_deliveries_for_retry = AsyncMock(return_value=[])
+
+    groups = await notification_service.claim_due_retries(uow)
+
+    assert groups == {}
+
+
+@pytest.mark.asyncio
+async def test_finalize_stuck_notifications_finalizes_each(notification_service, uow):
+    uow.notification_repo.get_stuck_in_progress_ids = AsyncMock(
+        return_value=[1, 2],
+    )
+    uow.delivery_repo.get_stats = AsyncMock(return_value={"sent": 1})
+    uow.notification_repo.update_status = AsyncMock()
+
+    count = await notification_service.finalize_stuck_notifications(uow)
+
+    assert count == 2
+
+    uow.notification_repo.get_stuck_in_progress_ids.assert_awaited_once()
+    uow.delivery_repo.get_stats.assert_awaited_with(2)
+    assert uow.delivery_repo.get_stats.await_count == 2
+    assert uow.notification_repo.update_status.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_finalize_stuck_notifications_empty(notification_service, uow):
+    uow.notification_repo.get_stuck_in_progress_ids = AsyncMock(return_value=[])
+
+    count = await notification_service.finalize_stuck_notifications(uow)
+
+    assert count == 0
+
+    uow.delivery_repo.get_stats.assert_not_called()
+    uow.notification_repo.update_status.assert_not_called()

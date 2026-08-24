@@ -60,4 +60,6 @@ class Settings(BaseSettings):
 
     DELIVERY_BATCH_SIZE: int
 
+    SWEEP_INTERVAL_SECONDS: int
+
 settings = Settings()

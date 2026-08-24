@@ -387,3 +387,143 @@ async def test_get_ready_for_dispatch_filters_by_notification(
     ready = await delivery_repo.get_ready_for_dispatch(notification.id)
 
     assert ready == [d1.id]
+
+
+@pytest.mark.asyncio
+async def test_claim_deliveries_for_retry_returns_due_pending(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    due = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=utc_now() - timedelta(minutes=1),
+    )
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=utc_now() + timedelta(minutes=5),
+    )
+
+    # PENDING without next_attempt_at is a fresh dispatch, not a retry
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    lease = utc_now() + timedelta(minutes=10)
+
+    claimed = await delivery_repo.claim_deliveries_for_retry(lease)
+
+    assert len(claimed) == 1
+
+    claimed_delivery = claimed[0]
+
+    assert isinstance(claimed_delivery, Delivery)
+    assert claimed_delivery.id == due.id
+    assert claimed_delivery.status == DeliveryStatus.PENDING
+    assert abs((claimed_delivery.next_attempt_at - lease).total_seconds()) < 0.001
+
+
+@pytest.mark.asyncio
+async def test_claim_deliveries_for_retry_excludes_terminal_statuses(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.SENT,
+    )
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.FAILED,
+        next_attempt_at=utc_now() - timedelta(minutes=1),
+    )
+
+    lease = utc_now() + timedelta(minutes=10)
+
+    claimed = await delivery_repo.claim_deliveries_for_retry(lease)
+
+    assert claimed == []
+
+
+@pytest.mark.asyncio
+async def test_claim_deliveries_for_retry_second_call_is_empty(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=utc_now() - timedelta(minutes=1),
+    )
+
+    first_lease = utc_now() + timedelta(minutes=10)
+    second_lease = utc_now() + timedelta(minutes=20)
+
+    first = await delivery_repo.claim_deliveries_for_retry(first_lease)
+    second = await delivery_repo.claim_deliveries_for_retry(second_lease)
+
+    assert len(first) == 1
+    assert second == []
+
+
+@pytest.mark.asyncio
+async def test_claim_deliveries_for_retry_across_notifications(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    notification_template,
+    group,
+    db_session,
+    delivery_repo,
+):
+    other_notification = Notification(
+        template_id=notification_template.id,
+        group_id=group.id,
+    )
+    db_session.add(other_notification)
+    await db_session.flush()
+
+    d1 = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=utc_now() - timedelta(minutes=1),
+    )
+
+    d2 = await delivery_factory(
+        notification_id=other_notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=utc_now() - timedelta(minutes=2),
+    )
+
+    lease = utc_now() + timedelta(minutes=10)
+
+    claimed = await delivery_repo.claim_deliveries_for_retry(lease)
+
+    assert sorted(d.id for d in claimed) == sorted([d1.id, d2.id])
+
+
+

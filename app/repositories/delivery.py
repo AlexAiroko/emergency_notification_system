@@ -106,3 +106,25 @@ class DeliveryRepository(BaseRepository):
 
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
+
+    async def claim_deliveries_for_retry(
+        self,
+        next_attempt_at: datetime,
+    ) -> list[Delivery]:
+        """
+        Returns due retry deliveries and pushes their next_attempt_at forward,
+        so concurrent sweeps do not pick the same deliveries twice.
+        """
+        
+        stmt = (
+            update(self.model)
+            .where(
+                self.model.status == DeliveryStatus.PENDING,
+                self.model.next_attempt_at.is_not(None),
+                self.model.next_attempt_at <= func.now(),
+            )
+            .values(next_attempt_at=next_attempt_at)
+            .returning(self.model)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())

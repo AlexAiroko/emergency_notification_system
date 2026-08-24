@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 import logging
 
 from app.core.config import settings
+from app.core.utils import utc_now
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
@@ -96,8 +97,7 @@ class DeliveryService:
         except ProviderError as exc:
             if delivery.attempts < settings.RETRY_COUNT:
                 next_attempt_at = (
-                    datetime.now(timezone.utc) + 
-                    timedelta(seconds=settings.RETRY_INTERVAL_SECONDS)
+                    utc_now() + timedelta(seconds=settings.RETRY_INTERVAL_SECONDS)
                 )
                 await uow.delivery_repo.mark_retry(delivery.id, next_attempt_at, error_message=str(exc))
                 logger.info(

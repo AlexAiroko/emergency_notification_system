@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
+from app.core.utils import utc_now
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.notification import Notification
 
@@ -228,7 +229,7 @@ async def test_mark_retry(
         contact_method_id=contact_method.id,
     )
 
-    next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+    next_attempt_at = utc_now() + timedelta(minutes=1)
 
     await delivery_repo.mark_retry(delivery.id, next_attempt_at, "network error")
 
@@ -254,7 +255,7 @@ async def test_mark_retry_increments_attempts(
         contact_method_id=contact_method.id,
     )
 
-    later = datetime.now(timezone.utc) + timedelta(minutes=1)
+    later = utc_now() + timedelta(minutes=1)
 
     await delivery_repo.mark_retry(delivery.id, later, "fail 1")
     await delivery_repo.mark_retry(delivery.id, later, "fail 2")
@@ -317,7 +318,7 @@ async def test_get_ready_for_dispatch_excludes_future_next_attempt(
     contact_method,
     delivery_repo,
 ):
-    future = datetime.now(timezone.utc) + timedelta(minutes=5)
+    future = utc_now() + timedelta(minutes=5)
 
     await delivery_factory(
         notification_id=notification.id,
@@ -339,7 +340,7 @@ async def test_get_ready_for_dispatch_includes_past_next_attempt(
     contact_method,
     delivery_repo,
 ):
-    past = datetime.now(timezone.utc) - timedelta(minutes=5)
+    past = utc_now() - timedelta(minutes=5)
 
     delivery = await delivery_factory(
         notification_id=notification.id,

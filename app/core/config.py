@@ -58,4 +58,6 @@ class Settings(BaseSettings):
     RETRY_COUNT: int
     RETRY_INTERVAL_SECONDS: int
 
+    DELIVERY_BATCH_SIZE: int
+
 settings = Settings()

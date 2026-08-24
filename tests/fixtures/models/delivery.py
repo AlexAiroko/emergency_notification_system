@@ -13,6 +13,8 @@ def delivery_factory(db_session):
             channel=kwargs.get("channel", "email"),
             address=kwargs.get("address", "test@mail.com"),
             status=kwargs.get("status", DeliveryStatus.PENDING),
+            attempts=kwargs.get("attempts", 0),
+            next_attempt_at=kwargs.get("next_attempt_at"),
         )
 
         db_session.add(delivery)

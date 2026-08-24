@@ -223,3 +223,24 @@ async def test_send_pending(delivery_service, uow):
     )
 
     assert delivery_service.send_delivery.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_send_deliveries(delivery_service, uow):
+    delivery_service.send_delivery = AsyncMock()
+
+    await delivery_service.send_deliveries(uow, [10, 20, 30])
+
+    assert delivery_service.send_delivery.await_count == 3
+    delivery_service.send_delivery.assert_any_await(uow, 10)
+    delivery_service.send_delivery.assert_any_await(uow, 20)
+    delivery_service.send_delivery.assert_any_await(uow, 30)
+
+
+@pytest.mark.asyncio
+async def test_send_deliveries_empty(delivery_service, uow):
+    delivery_service.send_delivery = AsyncMock()
+
+    await delivery_service.send_deliveries(uow, [])
+
+    delivery_service.send_delivery.assert_not_awaited()

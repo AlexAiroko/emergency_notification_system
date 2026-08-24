@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.models.delivery import Delivery, DeliveryStatus
+from app.models.notification import Notification
 
 
 @pytest.mark.asyncio
@@ -261,3 +262,127 @@ async def test_mark_retry_increments_attempts(
     updated = (await delivery_repo.get_by_notification(notification.id))[0]
 
     assert updated.attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_get_ready_for_dispatch(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    d1 = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    d2 = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    ready = await delivery_repo.get_ready_for_dispatch(notification.id)
+
+    assert ready == [d1.id, d2.id]
+
+
+@pytest.mark.asyncio
+async def test_get_ready_for_dispatch_excludes_sent(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        status=DeliveryStatus.SENT,
+    )
+
+    ready = await delivery_repo.get_ready_for_dispatch(notification.id)
+
+    assert ready == []
+
+
+@pytest.mark.asyncio
+async def test_get_ready_for_dispatch_excludes_future_next_attempt(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    future = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=future,
+    )
+
+    ready = await delivery_repo.get_ready_for_dispatch(notification.id)
+
+    assert ready == []
+
+
+@pytest.mark.asyncio
+async def test_get_ready_for_dispatch_includes_past_next_attempt(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    delivery_repo,
+):
+    past = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    delivery = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+        next_attempt_at=past,
+    )
+
+    ready = await delivery_repo.get_ready_for_dispatch(notification.id)
+
+    assert ready == [delivery.id]
+
+
+@pytest.mark.asyncio
+async def test_get_ready_for_dispatch_filters_by_notification(
+    delivery_factory,
+    notification,
+    contact,
+    contact_method,
+    notification_template,
+    group,
+    delivery_repo,
+    db_session,
+):
+    other_notification = Notification(
+        template_id=notification_template.id,
+        group_id=group.id,
+    )
+    db_session.add(other_notification)
+    await db_session.flush()
+
+    d1 = await delivery_factory(
+        notification_id=notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    await delivery_factory(
+        notification_id=other_notification.id,
+        contact_id=contact.id,
+        contact_method_id=contact_method.id,
+    )
+
+    ready = await delivery_repo.get_ready_for_dispatch(notification.id)
+
+    assert ready == [d1.id]

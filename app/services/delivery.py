@@ -144,3 +144,11 @@ class DeliveryService:
             "Finished processing pending deliveries for notification %s",
             notification_id,
         )
+
+    async def send_deliveries(
+        self,
+        uow: UnitOfWork,
+        delivery_ids: list[int],
+    ) -> None:
+        for delivery_id in delivery_ids:
+            await self.send_delivery(uow, delivery_id)

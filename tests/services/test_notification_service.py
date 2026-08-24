@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -125,43 +125,46 @@ async def test_create_notification_with_contact_without_methods(notification_ser
 
 
 @pytest.mark.asyncio
-async def test_send_notification(notification_service, uow):
+async def test_start_notification(notification_service, uow):
     uow.notification_repo.get = AsyncMock(return_value=SimpleNamespace(id=42))
     uow.notification_repo.mark_started = AsyncMock()
 
-    notification_service.delivery_service.send_pending = AsyncMock()
-    notification_service.finalize_notification = AsyncMock()
+    await notification_service.start_notification(uow, 42)
 
-    await notification_service.send_notification(
-        uow,
-        42,
-    )
-
+    uow.notification_repo.get.assert_awaited_once_with(42)
     uow.notification_repo.mark_started.assert_awaited_once_with(42)
-
-    notification_service.delivery_service.send_pending.assert_awaited_once_with(
-        uow,
-        42,
-    )
-
-    notification_service.finalize_notification.assert_awaited_once_with(
-        uow,
-        42,
-    )
 
 
 @pytest.mark.asyncio
-async def test_send_notification_not_found(notification_service, uow):
+async def test_start_notification_not_found(notification_service, uow):
     uow.notification_repo.get = AsyncMock(return_value=None)
 
     with pytest.raises(
         NotificationNotFoundError,
         match="Notification 42 not found",
     ):
-        await notification_service.send_notification(
-            uow,
-            42,
-        )
+        await notification_service.start_notification(uow, 42)
+
+
+@pytest.mark.asyncio
+async def test_prepare_batches(notification_service, uow):
+    uow.delivery_repo.get_ready_for_dispatch = AsyncMock(
+        return_value=[1, 2, 3, 4, 5],
+    )
+
+    with patch("app.services.notification.settings.DELIVERY_BATCH_SIZE", 2):
+        batches = await notification_service.prepare_batches(uow, 10)
+
+    assert batches == [[1, 2], [3, 4], [5]]
+
+
+@pytest.mark.asyncio
+async def test_prepare_batches_empty(notification_service, uow):
+    uow.delivery_repo.get_ready_for_dispatch = AsyncMock(return_value=[])
+
+    batches = await notification_service.prepare_batches(uow, 10)
+
+    assert batches == []
 
 
 @pytest.mark.asyncio

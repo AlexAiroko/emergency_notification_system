@@ -8,7 +8,10 @@ celery_app = Celery(
     "notification_app",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.notification"],
+    include=[
+        "app.tasks.notification",
+        "app.tasks.delivery",
+    ],
 )
 
 celery_app.conf.update(

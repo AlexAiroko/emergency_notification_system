@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 
 from app.models.delivery import Delivery, DeliveryStatus
 from app.repositories.base import BaseRepository
@@ -88,3 +88,21 @@ class DeliveryRepository(BaseRepository):
 
         await self.session.execute(stmt)
         await self.flush()
+
+    async def get_ready_for_dispatch(self, notification_id: int) -> list[int]:
+        """PENDING deliveries that can be sent now"""
+        stmt = (
+            select(self.model.id)
+            .where(
+                self.model.notification_id == notification_id,
+                self.model.status == DeliveryStatus.PENDING,
+                or_(
+                    self.model.next_attempt_at.is_(None),
+                    self.model.next_attempt_at <= func.now(),
+                ),
+            )
+            .order_by(self.model.id)
+        )
+
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())

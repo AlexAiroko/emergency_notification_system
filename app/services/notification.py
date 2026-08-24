@@ -1,5 +1,6 @@
 import logging
 
+from app.core.config import settings
 from app.db.uow import UnitOfWork
 from app.exceptions.notification import NotificationNotFoundError
 from app.models.delivery import Delivery, DeliveryStatus
@@ -96,25 +97,13 @@ class NotificationService:
 
         return notification
 
-    async def send_notification(
+    async def start_notification(
         self,
         uow: UnitOfWork,
         notification_id: int,
     ) -> None:
-        """
-        The full notification sending cycle:
-        1. Sets the notification to IN_PROGRESS
-        2. Sends all pending deliveries
-        3. Finalizes the notification status
-        """
-
-        logger.info(
-            "Started sending notification %s",
-            notification_id,
-        )
-
         notification = await uow.notification_repo.get(notification_id)
-
+        
         if notification is None:
             logger.warning(
                 "Notification %s not found",
@@ -122,30 +111,21 @@ class NotificationService:
             )
             raise NotificationNotFoundError(notification_id)
 
-
         await uow.notification_repo.mark_started(notification_id)
 
-        try:
-            await self.delivery_service.send_pending(
-                uow,
-                notification_id,
-            )
-        except Exception:
-            logger.exception(
-                "Unexpected error while sending notification %s",
-                notification_id,
-            )
-            raise
-        finally:
-            await self.finalize_notification(
-                uow,
-                notification_id,
-            )
+    async def prepare_batches(
+        self,
+        uow: UnitOfWork,
+        notification_id: int,
+    ) -> list[list[int]]:
+        delivery_ids = await uow.delivery_repo.get_ready_for_dispatch(notification_id)
 
-        logger.info(
-            "Finished sending notification %s",
-            notification_id,
-        )
+        batches = [
+            delivery_ids[i: i + settings.DELIVERY_BATCH_SIZE]
+            for i in range(0, len(delivery_ids), settings.DELIVERY_BATCH_SIZE)
+        ]
+
+        return batches
 
     async def finalize_notification(
         self,

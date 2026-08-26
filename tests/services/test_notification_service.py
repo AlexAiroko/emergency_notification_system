@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.utils import utc_now
+from app.exceptions.delivery import TooManyDeliveriesError
+from app.exceptions.group import GroupInactiveError
 from app.exceptions.notification import NotificationNotFoundError
 from app.models.contact_method import ChannelType
 from app.models.delivery import DeliveryStatus
@@ -18,12 +20,14 @@ async def test_create_notification(notification_service, uow):
         id=10,
         channel=ChannelType.EMAIL,
         address="user@example.com",
+        is_active=True,
     )
 
     telegram = SimpleNamespace(
         id=11,
         channel=ChannelType.TELEGRAM,
         address="123456789",
+        is_active=True,
     )
 
     contact = SimpleNamespace(
@@ -37,6 +41,7 @@ async def test_create_notification(notification_service, uow):
     uow.delivery_repo.create_bulk = AsyncMock()
 
     notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     result = await notification_service.create_notification(
         uow,
@@ -51,7 +56,10 @@ async def test_create_notification(notification_service, uow):
         5,
     )
 
-    uow.group_repo.get_with_contacts.assert_awaited_once_with(7)
+    notification_service.group_service.ensure_group_is_active.assert_awaited_once_with(
+        uow,
+        7,
+    )
 
     uow.notification_repo.create.assert_awaited_once_with(
         template_id=5,
@@ -88,6 +96,7 @@ async def test_create_notification_without_contacts(notification_service, uow):
     uow.delivery_repo.create_bulk = AsyncMock()
 
     notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     result = await notification_service.create_notification(
         uow,
@@ -115,6 +124,7 @@ async def test_create_notification_with_contact_without_methods(notification_ser
     uow.delivery_repo.create_bulk = AsyncMock()
 
     notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     await notification_service.create_notification(
         uow,
@@ -329,3 +339,141 @@ async def test_finalize_stuck_notifications_empty(notification_service, uow):
 
     uow.delivery_repo.get_stats.assert_not_called()
     uow.notification_repo.update_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_notification_skips_inactive_methods(notification_service, uow):
+    notification = SimpleNamespace(id=1)
+
+    active_method = SimpleNamespace(
+        id=10,
+        channel=ChannelType.EMAIL,
+        address="active@example.com",
+        is_active=True,
+    )
+
+    inactive_method = SimpleNamespace(
+        id=11,
+        channel=ChannelType.TELEGRAM,
+        address="123456789",
+        is_active=False,
+    )
+
+    contact = SimpleNamespace(
+        id=100,
+        contact_methods=[active_method, inactive_method],
+    )
+
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=7))
+    uow.notification_repo.create = AsyncMock(return_value=notification)
+    uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
+    uow.delivery_repo.create_bulk = AsyncMock()
+
+    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
+
+    await notification_service.create_notification(
+        uow,
+        template_id=1,
+        group_id=7,
+    )
+
+    deliveries = uow.delivery_repo.create_bulk.call_args.args[0]
+
+    assert len(deliveries) == 1
+    assert deliveries[0].contact_method_id == 10
+
+
+@pytest.mark.asyncio
+async def test_create_notification_raises_too_many_deliveries(notification_service, uow):
+    notification = SimpleNamespace(id=1)
+
+    methods = [
+        SimpleNamespace(
+            id=i,
+            channel=ChannelType.EMAIL,
+            address=f"user{i}@example.com",
+            is_active=True,
+        )
+        for i in range(1, 4)
+    ]
+
+    contact = SimpleNamespace(
+        id=100,
+        contact_methods=methods,
+    )
+
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=7))
+    uow.notification_repo.create = AsyncMock(return_value=notification)
+    uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
+    uow.delivery_repo.create_bulk = AsyncMock()
+
+    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
+
+    with patch("app.services.notification.settings.MAX_DELIVERIES_PER_NOTIFICATION", 2):
+        with pytest.raises(TooManyDeliveriesError):
+            await notification_service.create_notification(
+                uow,
+                template_id=1,
+                group_id=7,
+            )
+
+    uow.delivery_repo.create_bulk.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_notification_passes_at_exact_limit(notification_service, uow):
+    notification = SimpleNamespace(id=1)
+
+    methods = [
+        SimpleNamespace(
+            id=i,
+            channel=ChannelType.EMAIL,
+            address=f"user{i}@example.com",
+            is_active=True,
+        )
+        for i in range(1, 3)
+    ]
+
+    contact = SimpleNamespace(
+        id=100,
+        contact_methods=methods,
+    )
+
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=SimpleNamespace(id=7))
+    uow.notification_repo.create = AsyncMock(return_value=notification)
+    uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
+    uow.delivery_repo.create_bulk = AsyncMock()
+
+    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
+
+    with patch("app.services.notification.settings.MAX_DELIVERIES_PER_NOTIFICATION", 2):
+        await notification_service.create_notification(
+            uow,
+            template_id=1,
+            group_id=7,
+        )
+
+    deliveries = uow.delivery_repo.create_bulk.call_args.args[0]
+    assert len(deliveries) == 2
+
+
+@pytest.mark.asyncio
+async def test_create_notification_raises_for_inactive_group(notification_service, uow):
+    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.group_service.ensure_group_is_active = AsyncMock(
+        side_effect=GroupInactiveError(7),
+    )
+
+    with pytest.raises(GroupInactiveError):
+        await notification_service.create_notification(
+            uow,
+            template_id=1,
+            group_id=7,
+        )
+
+    uow.notification_repo.create.assert_not_called()
+    uow.group_repo.get_contacts_for_dispatch.assert_not_called()
+    uow.delivery_repo.create_bulk.assert_not_called()

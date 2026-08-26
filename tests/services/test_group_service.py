@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.exceptions.contact import ContactNotFoundError
 from app.exceptions.group import (
     GroupAlreadyExistsError,
+    GroupInactiveError,
     GroupNotFoundError,
 )
 
@@ -310,3 +311,34 @@ async def test_get_contacts_group_not_found(group_service, uow):
             uow,
             group_id=1,
         )
+
+
+@pytest.mark.asyncio
+async def test_ensure_group_is_active_returns_active_group(group_service, uow):
+    group = SimpleNamespace(id=1, is_active=True)
+
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=group)
+
+    result = await group_service.ensure_group_is_active(uow, 1)
+
+    assert result is group
+
+    uow.group_repo.get_with_contacts.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_ensure_group_is_active_raises_for_inactive_group(group_service, uow):
+    group = SimpleNamespace(id=1, is_active=False)
+
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=group)
+
+    with pytest.raises(GroupInactiveError):
+        await group_service.ensure_group_is_active(uow, 1)
+
+
+@pytest.mark.asyncio
+async def test_ensure_group_is_active_raises_for_missing_group(group_service, uow):
+    uow.group_repo.get_with_contacts = AsyncMock(return_value=None)
+
+    with pytest.raises(GroupNotFoundError):
+        await group_service.ensure_group_is_active(uow, 1)

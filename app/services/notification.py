@@ -4,7 +4,9 @@ import logging
 from app.core.config import settings
 from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
+from app.exceptions.delivery import TooManyDeliveriesError
 from app.exceptions.notification import NotificationNotFoundError
+from app.models.contact import Contact
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.notification import Notification, NotificationStatus
 from app.services.delivery import DeliveryService
@@ -22,23 +24,24 @@ class NotificationService:
 
     async def _prepare_deliveries(
         self,
-        contacts,
+        contacts: list[Contact],
         notification_id: int,
     ) -> list[Delivery]:
         deliveries = []
         
         for contact in contacts:
             for method in contact.contact_methods:
-                deliveries.append(
-                    Delivery(
-                        notification_id=notification_id,
-                        contact_id=contact.id,
-                        contact_method_id=method.id,
-                        channel=method.channel,
-                        address=method.address,
-                        status=DeliveryStatus.PENDING,
+                if method.is_active:
+                    deliveries.append(
+                        Delivery(
+                            notification_id=notification_id,
+                            contact_id=contact.id,
+                            contact_method_id=method.id,
+                            channel=method.channel,
+                            address=method.address,
+                            status=DeliveryStatus.PENDING,
+                        )
                     )
-                )
 
         return deliveries
 
@@ -58,7 +61,7 @@ class NotificationService:
             template_id,
         )
 
-        await self.group_service.get_group(uow, group_id)
+        await self.group_service.ensure_group_is_active(uow, group_id)
 
         notification = await uow.notification_repo.create(
             template_id=template_id,
@@ -88,6 +91,12 @@ class NotificationService:
                 notification.id,
             )
             return notification
+
+        if len(deliveries) > settings.MAX_DELIVERIES_PER_NOTIFICATION:
+            raise TooManyDeliveriesError(
+                len(deliveries),
+                settings.MAX_DELIVERIES_PER_NOTIFICATION,
+            )
 
         await uow.delivery_repo.create_bulk(deliveries)
 

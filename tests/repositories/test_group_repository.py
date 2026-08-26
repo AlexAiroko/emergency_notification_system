@@ -137,3 +137,99 @@ async def test_get_contacts_for_dispatch(db_session, group_repo):
     assert len(result) == 1
     assert result[0].id == contact.id
     assert len(result[0].contact_methods) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_contacts_for_dispatch_excludes_inactive_contacts(
+    db_session,
+    group_repo,
+):
+    group = await group_repo.create(name="G1")
+
+    c1 = Contact(name="Bob")
+    c2 = Contact(name="Alice", is_active=False)
+    db_session.add_all([c1, c2])
+    await db_session.flush()
+
+    db_session.add_all([
+        ContactMethod(
+            contact_id=c1.id,
+            channel=ChannelType.EMAIL,
+            address="bob@mail.com",
+        ),
+        ContactMethod(
+            contact_id=c2.id,
+            channel=ChannelType.EMAIL,
+            address="alice@mail.com",
+        ),
+    ])
+
+    await group_repo.add_contact(group.id, c1.id)
+    await group_repo.add_contact(group.id, c2.id)
+
+    result = await group_repo.get_contacts_for_dispatch(group.id)
+    
+    assert len(result) == 1
+    assert result[0].id == c1.id
+    assert len(result[0].contact_methods) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_contacts_for_dispatch_mixed_active_and_inactive(
+    db_session,
+    group_repo,
+):
+    group = await group_repo.create(name="G1")
+
+    c1 = Contact(name="Bob")
+    c2 = Contact(name="Alice")
+    c3 = Contact(name="John", is_active=False)
+
+    db_session.add_all([c1, c2, c3])
+    await db_session.flush()
+
+    db_session.add_all([
+        ContactMethod(
+            contact_id=c1.id,
+            channel=ChannelType.EMAIL,
+            address="bob@mail.com",
+        ),
+        ContactMethod(
+            contact_id=c1.id,
+            channel=ChannelType.TELEGRAM,
+            address="123",
+        ),
+        ContactMethod(
+            contact_id=c2.id,
+            channel=ChannelType.EMAIL,
+            address="alice@mail.com",
+        ),
+        ContactMethod(
+            contact_id=c2.id,
+            channel=ChannelType.TELEGRAM,
+            address="124",
+        ),
+        ContactMethod(
+            contact_id=c3.id,
+            channel=ChannelType.EMAIL,
+            address="john@mail.com",
+        ),
+        ContactMethod(
+            contact_id=c3.id,
+            channel=ChannelType.TELEGRAM,
+            address="125",
+        ),
+    ])
+
+    await group_repo.add_contact(group.id, c1.id)
+    await group_repo.add_contact(group.id, c2.id)
+    await group_repo.add_contact(group.id, c3.id)
+
+    result = await group_repo.get_contacts_for_dispatch(group.id)
+    
+    assert len(result) == 2
+    assert result[0].id == c1.id
+    assert result[1].id == c2.id
+    assert len(result[0].contact_methods) == 2
+    assert len(result[1].contact_methods) == 2
+

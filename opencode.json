@@ -5,7 +5,8 @@
         "bash": {
             "*": "ask",
             "ls": "allow",
-            "dir": "allow"
+            "dir": "allow",
+            "poetry run pytest*": "allow"
         }
     }
 }

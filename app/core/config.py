@@ -62,4 +62,6 @@ class Settings(BaseSettings):
 
     SWEEP_INTERVAL_SECONDS: int
 
+    MAX_DELIVERIES_PER_NOTIFICATION: int
+
 settings = Settings()

@@ -41,7 +41,10 @@ class GroupRepository(ActiveRepository):
         stmt = (
             select(Contact)
             .join(GroupContact, GroupContact.contact_id == Contact.id)
-            .where(GroupContact.group_id == group_id)
+            .where(
+                GroupContact.group_id == group_id,
+                Contact.is_active.is_(True),
+            )
             .options(selectinload(Contact.contact_methods))
         )
         res = await self.session.execute(stmt)

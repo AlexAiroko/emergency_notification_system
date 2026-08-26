@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.uow import UnitOfWork
 from app.exceptions.contact import ContactNotFoundError
-from app.exceptions.group import GroupAlreadyExistsError, GroupNotFoundError
+from app.exceptions.group import GroupAlreadyExistsError, GroupInactiveError, GroupNotFoundError
 from app.models.contact import Contact
 from app.models.group import Group
 
@@ -160,6 +160,21 @@ class GroupService:
         self,
         uow: UnitOfWork,
         group_id: int,
-    ) -> list[Contact]:
+    ) -> list[Contact]:        
         group = await self._get_group(uow, group_id)
         return group.contacts
+
+    async def ensure_group_is_active(
+        self,
+        uow: UnitOfWork,
+        group_id: int,
+    ) -> Group:
+        """
+        Returns the group if it exists and is active.
+        """
+
+        group = await self._get_group(uow, group_id)
+        if not group.is_active:
+            raise GroupInactiveError(group_id)
+        
+        return group

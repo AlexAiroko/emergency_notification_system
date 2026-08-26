@@ -1,10 +1,11 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.exceptions.notification_template import (
+    MessageTooLongError,
     TemplateAlreadyExistsError,
     TemplateBodyEmptyError,
     TemplateInactiveError,
@@ -276,3 +277,53 @@ async def test_ensure_template_inactive(template_service, uow):
             uow,
             10,
         )
+
+
+@pytest.mark.asyncio
+async def test_create_template_rejects_long_body(template_service, uow):
+    uow.template_repo.create = AsyncMock()
+
+    with patch("app.services.notification_template.settings.MAX_MESSAGE_SIZE_BYTES", 4096):
+        with pytest.raises(MessageTooLongError):
+            await template_service.create_template(
+                uow,
+                body="x" * 5000,
+                name="name",
+            )
+
+    uow.template_repo.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_template_accepts_body_at_limit(template_service, uow):
+    template = SimpleNamespace(id=1, name="name", is_active=True)
+
+    uow.template_repo.create = AsyncMock(return_value=template)
+
+    with patch("app.services.notification_template.settings.MAX_MESSAGE_SIZE_BYTES", 4096):
+        result = await template_service.create_template(
+            uow,
+            body="x" * 4096,
+            name="name",
+        )
+
+    assert result is template
+
+    uow.template_repo.create.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_update_template_rejects_long_body(template_service, uow):
+    uow.template_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.template_repo.update = AsyncMock()
+
+    with patch("app.services.notification_template.settings.MAX_MESSAGE_SIZE_BYTES", 4096):
+        with pytest.raises(MessageTooLongError):
+            await template_service.update_template(
+                uow,
+                template_id=1,
+                subject="subj",
+                body="x" * 5000,
+            )
+
+    uow.template_repo.update.assert_not_called()

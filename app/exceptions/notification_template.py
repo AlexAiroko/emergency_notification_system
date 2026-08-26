@@ -27,3 +27,9 @@ class TemplateBodyEmptyError(ValidationError):
 
     def __init__(self):
         super().__init__("Template body cannot be empty")
+
+
+class MessageTooLongError(ValidationError):
+    code = "message_too_long"
+    def __init__(self, size: int, max_size: int) -> None:
+        super().__init__(f"Message size {size} bytes exceeds limit of {max_size} bytes")

@@ -6,7 +6,8 @@
             "*": "ask",
             "ls": "allow",
             "dir": "allow",
-            "poetry run pytest*": "allow"
+            "poetry run pytest*": "allow",
+            "poetry run git diff*": "allow"
         }
     }
 }

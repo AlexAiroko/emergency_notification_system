@@ -2,14 +2,17 @@ import logging
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import settings
 from app.db.uow import UnitOfWork
 from app.exceptions.notification_template import (
+    MessageTooLongError,
     TemplateAlreadyExistsError, 
     TemplateBodyEmptyError, 
     TemplateInactiveError, 
     TemplateNotFoundError,
 )
 from app.models.notification_template import NotificationTemplate
+
 
 
 logger = logging.getLogger(__name__)
@@ -188,3 +191,7 @@ class NotificationTemplateService:
         
         if not body or not body.strip():
             raise TemplateBodyEmptyError()
+
+        size = len(body.encode("utf-8"))
+        if size > settings.MAX_MESSAGE_SIZE_BYTES:
+            raise MessageTooLongError(size, settings.MAX_MESSAGE_SIZE_BYTES)

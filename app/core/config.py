@@ -64,4 +64,6 @@ class Settings(BaseSettings):
 
     MAX_DELIVERIES_PER_NOTIFICATION: int
 
+    MAX_MESSAGE_SIZE_BYTES: int
+
 settings = Settings()

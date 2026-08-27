@@ -66,4 +66,7 @@ class Settings(BaseSettings):
 
     MAX_MESSAGE_SIZE_BYTES: int
 
+    RATE_LIMIT_EMAIL: int
+    RATE_LIMIT_TELEGRAM: int
+
 settings = Settings()

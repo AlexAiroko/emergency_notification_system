@@ -2,6 +2,7 @@ from datetime import timedelta
 import logging
 
 from app.core.config import settings
+from app.core.rate_limiter import RateLimiter
 from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import TooManyDeliveriesError
@@ -17,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    def __init__(self) -> None:
-        self.delivery_service = DeliveryService()
+    def __init__(self, rate_limiter: RateLimiter) -> None:
+        self.delivery_service = DeliveryService(rate_limiter=rate_limiter)
         self.group_service = GroupService()
         self.template_service = NotificationTemplateService()
 

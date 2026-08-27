@@ -2,10 +2,12 @@ from datetime import timedelta
 import logging
 
 from app.core.config import settings
+from app.core.rate_limiter import RateLimiter
 from app.core.utils import utc_now
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
+from app.models.contact_method import ChannelType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.providers.base import ProviderError
 from app.providers.provider_registry import ProviderRegistry
@@ -15,9 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 class DeliveryService:
-    def __init__(self) -> None:
+    def __init__(self, rate_limiter: RateLimiter) -> None:
         self.template_service = NotificationTemplateService()
         self.provider_registry = ProviderRegistry()
+        self.rate_limiter = rate_limiter
+
+    def _get_rate_limit(self, channel: ChannelType) -> int:
+        limits = {
+            ChannelType.EMAIL: settings.RATE_LIMIT_EMAIL,
+            ChannelType.TELEGRAM: settings.RATE_LIMIT_TELEGRAM,
+        }
+        return limits.get(channel, 100)
 
     async def _get_delivery(
         self,
@@ -77,6 +87,20 @@ class DeliveryService:
 
         try:
             provider = self.provider_registry.get(delivery.channel)
+
+            allowed = await self.rate_limiter.acquire(
+                key=f"rate_limit:{delivery.channel.value}",
+                limit=self._get_rate_limit(delivery.channel),
+                window_seconds=60,
+            )
+
+            if not allowed:
+                next_attempt_at = utc_now() + timedelta(seconds=1)
+                await uow.delivery_repo.mark_retry(
+                    delivery.id, next_attempt_at, error_message="Rate limit exceeded",
+                )
+                logger.info("Delivery %s rate limited, retry in 1s", delivery.id)
+                return
 
             provider_message_id = await provider.send(
                 to=delivery.address,

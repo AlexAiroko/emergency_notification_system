@@ -9,12 +9,13 @@ from tests.fakes.fake_uow import make_mock_provider_registry, make_patched_fake_
 @patch("app.tasks.sweeper.send_batch_task")
 @patch("app.tasks.sweeper.UnitOfWork")
 @patch("app.tasks.sweeper.NotificationService")
+@patch("app.tasks.sweeper.RateLimiter")
 async def test_sweep_enqueues_batches(
+    mock_rate_limiter_cls,
     mock_service_cls,
     mock_uow_cls,
     mock_send_batch_task,
 ):
-    # Import inside test body: @patch replaces the module before it is loaded.
     from app.tasks.sweeper import _sweep_deliveries
 
     fake_uow = make_patched_fake_uow()
@@ -27,6 +28,9 @@ async def test_sweep_enqueues_batches(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
+    mock_limiter = AsyncMock()
+    mock_rate_limiter_cls.return_value = mock_limiter
+
     await _sweep_deliveries()
 
     service.claim_due_retries.assert_awaited_once_with(fake_uow)
@@ -35,13 +39,17 @@ async def test_sweep_enqueues_batches(
     mock_send_batch_task.delay.assert_called_once_with(42, [1, 2, 3])
 
     service.delivery_service.provider_registry.close_all.assert_awaited_once()
+    mock_limiter.__aenter__.assert_awaited_once()
+    mock_limiter.__aexit__.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 @patch("app.tasks.sweeper.send_batch_task")
 @patch("app.tasks.sweeper.UnitOfWork")
 @patch("app.tasks.sweeper.NotificationService")
+@patch("app.tasks.sweeper.RateLimiter")
 async def test_sweep_chunks_large_groups(
+    mock_rate_limiter_cls,
     mock_service_cls,
     mock_uow_cls,
     mock_send_batch_task,
@@ -58,6 +66,9 @@ async def test_sweep_chunks_large_groups(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
+    mock_limiter = AsyncMock()
+    mock_rate_limiter_cls.return_value = mock_limiter
+
     with patch("app.tasks.sweeper.settings.DELIVERY_BATCH_SIZE", 2):
         await _sweep_deliveries()
 
@@ -72,7 +83,9 @@ async def test_sweep_chunks_large_groups(
 @patch("app.tasks.sweeper.send_batch_task")
 @patch("app.tasks.sweeper.UnitOfWork")
 @patch("app.tasks.sweeper.NotificationService")
+@patch("app.tasks.sweeper.RateLimiter")
 async def test_sweep_without_claims_finalizes_only(
+    mock_rate_limiter_cls,
     mock_service_cls,
     mock_uow_cls,
     mock_send_batch_task,
@@ -89,6 +102,9 @@ async def test_sweep_without_claims_finalizes_only(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
+    mock_limiter = AsyncMock()
+    mock_rate_limiter_cls.return_value = mock_limiter
+
     await _sweep_deliveries()
 
     service.finalize_stuck_notifications.assert_awaited_once_with(fake_uow)
@@ -102,7 +118,9 @@ async def test_sweep_without_claims_finalizes_only(
 @patch("app.tasks.sweeper.send_batch_task")
 @patch("app.tasks.sweeper.UnitOfWork")
 @patch("app.tasks.sweeper.NotificationService")
+@patch("app.tasks.sweeper.RateLimiter")
 async def test_sweep_closes_registry_on_error(
+    mock_rate_limiter_cls,
     mock_service_cls,
     mock_uow_cls,
     mock_send_batch_task,
@@ -119,6 +137,9 @@ async def test_sweep_closes_registry_on_error(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
+    mock_limiter = AsyncMock()
+    mock_rate_limiter_cls.return_value = mock_limiter
+
     with pytest.raises(RuntimeError, match="db down"):
         await _sweep_deliveries()
 
@@ -126,3 +147,4 @@ async def test_sweep_closes_registry_on_error(
     mock_send_batch_task.delay.assert_not_called()
 
     service.delivery_service.provider_registry.close_all.assert_awaited_once()
+    mock_limiter.__aexit__.assert_awaited_once()

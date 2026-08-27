@@ -244,3 +244,75 @@ async def test_send_deliveries_empty(delivery_service, uow):
     await delivery_service.send_deliveries(uow, [])
 
     delivery_service.send_delivery.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_send_delivery_rate_limited_schedules_retry(delivery_service, uow):
+    delivery = SimpleNamespace(
+        id=1,
+        notification_id=10,
+        channel=ChannelType.EMAIL,
+        address="user@mail.com",
+        attempts=0,
+    )
+
+    notification = SimpleNamespace(template_id=100)
+    template = SimpleNamespace(subject="Subject", body="Body")
+
+    provider = Mock()
+    provider.send = AsyncMock()
+
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.delivery_repo.mark_sent = AsyncMock()
+    uow.delivery_repo.mark_retry = AsyncMock()
+
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=template,
+    )
+    delivery_service.provider_registry.get = Mock(return_value=provider)
+    delivery_service.rate_limiter.acquire = AsyncMock(return_value=False)
+
+    await delivery_service.send_delivery(uow, 1)
+
+    provider.send.assert_not_awaited()
+    uow.delivery_repo.mark_sent.assert_not_awaited()
+
+    uow.delivery_repo.mark_retry.assert_awaited_once()
+    retry_args = uow.delivery_repo.mark_retry.call_args
+    assert retry_args.args[0] == 1
+    assert retry_args.kwargs["error_message"] == "Rate limit exceeded"
+
+
+@pytest.mark.asyncio
+async def test_send_delivery_rate_limiter_called_with_correct_key(delivery_service, uow):
+    delivery = SimpleNamespace(
+        id=1,
+        notification_id=10,
+        channel=ChannelType.TELEGRAM,
+        address="123456789",
+        attempts=0,
+    )
+
+    notification = SimpleNamespace(template_id=100)
+    template = SimpleNamespace(subject="Subject", body="Body")
+
+    provider = Mock()
+    provider.send = AsyncMock(return_value="msg-456")
+
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.delivery_repo.mark_sent = AsyncMock()
+
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=template,
+    )
+    delivery_service.provider_registry.get = Mock(return_value=provider)
+
+    await delivery_service.send_delivery(uow, 1)
+
+    delivery_service.rate_limiter.acquire.assert_awaited_once_with(
+        key="rate_limit:telegram",
+        limit=delivery_service.rate_limiter.acquire.call_args.kwargs["limit"],
+        window_seconds=60,
+    )

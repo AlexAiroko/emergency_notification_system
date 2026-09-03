@@ -3,8 +3,13 @@ import time
 
 import redis.asyncio as aioredis
 
+from app.core.config import settings
+
 
 logger = logging.getLogger(__name__)
+
+
+_rate_limiter: "RateLimiter | None" = None
 
 
 class RateLimiter:
@@ -21,17 +26,12 @@ class RateLimiter:
         self._redis_url = redis_url
         self._redis: aioredis.Redis | None = None
 
-    async def __aenter__(self) -> "RateLimiter":
-        self._redis = aioredis.from_url(
-            self._redis_url,
-            decode_responses=True,
-        )
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
-        if self._redis is not None:
-            await self._redis.aclose()
-        return False
+    async def connect(self):
+        if self._redis is None:
+            self._redis = aioredis.from_url(
+                self._redis_url,
+                decode_responses=True,
+            )
 
     async def acquire(
         self, 
@@ -54,7 +54,7 @@ class RateLimiter:
         """
 
         if self._redis is None:
-            raise RuntimeError("RateLimiter is not initialized. Use 'async with RateLimiter(...)'.")
+            await self.connect()
 
         now = time.time()
         window_start = now - window_seconds
@@ -83,3 +83,16 @@ class RateLimiter:
         await pipe2.execute()
 
         return True
+
+    async def close(self):
+        if self._redis is not None:
+            await self._redis.aclose()
+            self._redis = None
+
+
+def get_rate_limiter() -> RateLimiter:
+    """Returns the process-wide RateLimiter singleton."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = RateLimiter(settings.CELERY_RESULT_BACKEND)
+    return _rate_limiter

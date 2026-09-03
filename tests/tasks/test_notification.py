@@ -9,9 +9,9 @@ from tests.fakes.fake_uow import make_mock_provider_registry, make_patched_fake_
 @patch("app.tasks.notification.send_batch_task")
 @patch("app.tasks.notification.UnitOfWork")
 @patch("app.tasks.notification.NotificationService")
-@patch("app.tasks.notification.RateLimiter")
+@patch("app.tasks.notification.get_rate_limiter")
 async def test_dispatch_notification_enqueues_batches(
-    mock_rate_limiter_cls,
+    mock_get_limiter,
     mock_service_cls,
     mock_uow_cls,
     mock_send_batch_task,
@@ -28,8 +28,7 @@ async def test_dispatch_notification_enqueues_batches(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
-    mock_limiter = AsyncMock()
-    mock_rate_limiter_cls.return_value = mock_limiter
+    mock_get_limiter.return_value = Mock()
 
     await _dispatch_notification(42)
 
@@ -43,16 +42,14 @@ async def test_dispatch_notification_enqueues_batches(
     mock_send_batch_task.delay.assert_any_call(42, [3])
 
     service.delivery_service.provider_registry.close_all.assert_awaited_once()
-    mock_limiter.__aenter__.assert_awaited_once()
-    mock_limiter.__aexit__.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 @patch("app.tasks.notification.UnitOfWork")
 @patch("app.tasks.notification.NotificationService")
-@patch("app.tasks.notification.RateLimiter")
+@patch("app.tasks.notification.get_rate_limiter")
 async def test_dispatch_notification_no_batches_finalizes(
-    mock_rate_limiter_cls,
+    mock_get_limiter,
     mock_service_cls,
     mock_uow_cls,
 ):
@@ -69,8 +66,7 @@ async def test_dispatch_notification_no_batches_finalizes(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
-    mock_limiter = AsyncMock()
-    mock_rate_limiter_cls.return_value = mock_limiter
+    mock_get_limiter.return_value = Mock()
 
     await _dispatch_notification(42)
 
@@ -82,9 +78,9 @@ async def test_dispatch_notification_no_batches_finalizes(
 @pytest.mark.asyncio
 @patch("app.tasks.notification.UnitOfWork")
 @patch("app.tasks.notification.NotificationService")
-@patch("app.tasks.notification.RateLimiter")
+@patch("app.tasks.notification.get_rate_limiter")
 async def test_dispatch_notification_start_error_still_closes(
-    mock_rate_limiter_cls,
+    mock_get_limiter,
     mock_service_cls,
     mock_uow_cls,
 ):
@@ -102,11 +98,9 @@ async def test_dispatch_notification_start_error_still_closes(
     service.delivery_service.provider_registry = make_mock_provider_registry()
     mock_service_cls.return_value = service
 
-    mock_limiter = AsyncMock()
-    mock_rate_limiter_cls.return_value = mock_limiter
+    mock_get_limiter.return_value = Mock()
 
     with pytest.raises(NotificationNotFoundError):
         await _dispatch_notification(42)
 
     service.delivery_service.provider_registry.close_all.assert_awaited_once()
-    mock_limiter.__aexit__.assert_awaited_once()

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.exception import error_handler
@@ -7,9 +9,17 @@ from app.api.contact_method import router as contact_method_router
 from app.api.group import router as group_router
 from app.api.delivery import router as delivery_router
 from app.api.notification import router as notification_router
+from app.core.rate_limiter import get_rate_limiter
 from app.exceptions.base import AppError
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await get_rate_limiter().close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 app.include_router(template_router)

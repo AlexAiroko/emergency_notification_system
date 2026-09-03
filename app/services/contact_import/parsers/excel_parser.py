@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 
 from fastapi import UploadFile
@@ -10,13 +11,13 @@ from app.services.contact_import.parsers.base import BaseContactParser
 class ExcelParser(BaseContactParser):
     async def parse(self, file: UploadFile) -> list[dict]:
         await file.seek(0)
-
         content = await file.read()
-        # TODO: Sync function blocks the event loop, add to_thread
-        workbook = load_workbook(BytesIO(content))
+
+        workbook = await asyncio.to_thread(
+            load_workbook, BytesIO(content)
+        )
         
         sheet = workbook.active
-        
         rows = list(sheet.iter_rows(values_only=True))
         
         if not rows:
@@ -26,9 +27,4 @@ class ExcelParser(BaseContactParser):
         
         self.validate_headers(headers)
         
-        contacts = []
-        
-        for values in rows[1:]:
-            contacts.append(dict(zip(headers, values)))
-
-        return contacts
+        return [dict(zip(headers, values)) for values in rows[1:]]

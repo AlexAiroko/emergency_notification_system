@@ -7,6 +7,7 @@ from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import TooManyDeliveriesError
 from app.exceptions.notification import NotificationNotFoundError
+from app.metrics.registry import get_metrics_collector
 from app.models.contact import Contact
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.notification import Notification, NotificationStatus
@@ -126,6 +127,9 @@ class NotificationService:
 
         await uow.notification_repo.mark_started(notification_id)
 
+        collector = get_metrics_collector()
+        collector.notifications_in_progress.inc()
+
     async def prepare_batches(
         self,
         uow: UnitOfWork,
@@ -180,6 +184,10 @@ class NotificationService:
             notification_id,
             status,
         )
+
+        collector = get_metrics_collector()
+        collector.notifications_total.inc(status=status.value)
+        collector.notifications_in_progress.inc(-1)
 
         logger.info(
             "Finalized notification %s (status=%s, sent=%s, failed=%s)",

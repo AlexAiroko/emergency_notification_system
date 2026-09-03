@@ -7,6 +7,7 @@ from app.core.utils import utc_now
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
+from app.metrics.registry import get_metrics_collector
 from app.models.contact_method import ChannelType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.providers.base import ProviderError
@@ -100,6 +101,10 @@ class DeliveryService:
                     delivery.id, next_attempt_at, error_message="Rate limit exceeded",
                 )
                 logger.info("Delivery %s rate limited, retry in 1s", delivery.id)
+
+                collector = get_metrics_collector()
+                collector.rate_limit_rejects_total.inc(channel=delivery.channel.value)
+                collector.deliveries_total.inc(channel=delivery.channel.value, status="rate_limited")
                 return
 
             provider_message_id = await provider.send(
@@ -118,6 +123,9 @@ class DeliveryService:
                 delivery.id,
             )
 
+            collector = get_metrics_collector()
+            collector.deliveries_total.inc(channel=delivery.channel.value, status="sent")
+
         except ProviderError as exc:
             if delivery.attempts < settings.RETRY_COUNT:
                 next_attempt_at = (
@@ -128,6 +136,9 @@ class DeliveryService:
                     "Delivery %s scheduled retry (attempt %s/%s)",
                     delivery.id, delivery.attempts + 1, settings.RETRY_COUNT
                 )
+
+                collector = get_metrics_collector()
+                collector.delivery_retries_total.inc(channel=delivery.channel.value)
             else:
                 await uow.delivery_repo.mark_failed(
                     delivery.id,
@@ -137,6 +148,9 @@ class DeliveryService:
                     "Failed delivery %s",
                     delivery.id,
                 )
+
+                collector = get_metrics_collector()
+                collector.deliveries_total.inc(channel=delivery.channel.value, status="failed")
 
     async def send_pending(
         self,

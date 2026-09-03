@@ -21,6 +21,7 @@ class ContactImportService:
 
     async def import_contacts(
         self,
+        uow: UnitOfWork,
         file: UploadFile,
     ) -> ImportResult:
         """
@@ -43,8 +44,7 @@ class ContactImportService:
 
         for idx, row in enumerate(rows, start=1):
             try:
-                async with UnitOfWork() as uow: # TODO: Fix creating a new transaction for each row
-                    imported = await self._import_row(uow, row)
+                imported = await self._import_row(uow, row)
 
                 if imported:
                     result.imported += 1

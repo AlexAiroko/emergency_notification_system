@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, File, UploadFile, status
 
-from app.db.deps import get_uow
+from app.db.deps import get_contact_import_service, get_contact_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.contact import ContactCreate, ContactResponse, ContactUpdate
 from app.schemas.contact_import import ContactImportResponse, ImportErrorItem
-from app.services.contact import ContactService
-from app.services.contact_import.service import ContactImportService
+from app.services import ContactService, ContactImportService
 
 
 router = APIRouter(
@@ -22,16 +21,13 @@ router = APIRouter(
 async def create_contact(
     data: ContactCreate,
     uow: UnitOfWork = Depends(get_uow),
+    service: ContactService = Depends(get_contact_service),
 ):
-    service = ContactService()
-    
-    contact = await service.create_contact(
+    return await service.create_contact(
         uow=uow,
         external_id=data.external_id,
         name=data.name,
     )
-    
-    return contact
 
 
 @router.get(
@@ -71,12 +67,9 @@ async def get_active_contacts(
 async def get_contact_by_id(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: ContactService = Depends(get_contact_service),
 ):
-    service = ContactService()
-
-    contact = await service.get_contact(uow, contact_id)
-
-    return contact
+    return await service.get_contact(uow, contact_id)
 
 
 @router.patch(
@@ -87,8 +80,8 @@ async def update_contact(
     contact_id: int,
     data: ContactUpdate,
     uow: UnitOfWork = Depends(get_uow),
+    service: ContactService = Depends(get_contact_service),
 ):
-    service = ContactService()
     await service.update_contact(
         uow=uow,
         contact_id=contact_id,
@@ -103,8 +96,8 @@ async def update_contact(
 async def activate_contact(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: ContactService = Depends(get_contact_service),
 ):
-    service = ContactService()
     await service.activate_contact(uow, contact_id)
 
 
@@ -115,8 +108,8 @@ async def activate_contact(
 async def deactivate_contact(
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: ContactService = Depends(get_contact_service),
 ):
-    service = ContactService()
     await service.deactivate_contact(uow, contact_id)
 
 
@@ -126,10 +119,10 @@ async def deactivate_contact(
 )
 async def import_contacts(
     file: UploadFile = File(),
+    uow: UnitOfWork = Depends(get_uow),
+    service: ContactImportService = Depends(get_contact_import_service),
 ):
-    service = ContactImportService()
-    
-    result = await service.import_contacts(file=file)
+    result = await service.import_contacts(uow, file)
     
     return ContactImportResponse(
         message="Contacts import completed",

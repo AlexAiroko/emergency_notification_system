@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, status
 
-from app.db.deps import get_uow
+from app.db.deps import get_notification_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.delivery import DeliveryResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse
-from app.services.notification import NotificationService
+from app.services import NotificationService
 from app.tasks.notification import send_notification_task
 
 
@@ -21,16 +21,13 @@ router = APIRouter(
 async def create_notification(
     data: NotificationCreate,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationService = Depends(get_notification_service),
 ):
-    service = NotificationService()
-    
-    notification = await service.create_notification(
+    return await service.create_notification(
         uow=uow,
         template_id=data.template_id,
         group_id=data.group_id,
     )
-    
-    return notification
 
 
 @router.get(
@@ -55,9 +52,8 @@ async def get_notifications(
 async def get_notification(
     notification_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationService = Depends(get_notification_service),
 ):
-    service = NotificationService()
-    
     return await service.get_notification(uow, notification_id)
 
 

@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, status
 
-from app.db.deps import get_uow
+from app.db.deps import get_group_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.contact import ContactResponse
 from app.schemas.group import GroupCreate, GroupResponse, GroupUpdate, GroupWithContactsResponse
-from app.services.group import GroupService
+from app.services import GroupService
 
 
 router = APIRouter(
@@ -21,15 +21,12 @@ router = APIRouter(
 async def create_group(
     data: GroupCreate,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-    
-    group = await service.create_group(
+    return await service.create_group(
         uow=uow,
         name=data.name,
     )
-    
-    return group
 
 
 @router.get(
@@ -39,15 +36,12 @@ async def create_group(
 async def get_group(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-    
-    group = await service.get_group(
+    return await service.get_group(
         uow=uow,
         group_id=group_id,
     )
-    
-    return group
 
 
 @router.get(
@@ -58,8 +52,8 @@ async def get_groups(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
     return await service.get_many_groups(
         uow,
         limit=limit,
@@ -75,9 +69,8 @@ async def update_group(
     group_id: int,
     data: GroupUpdate,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-
     await service.update_group(
         uow=uow,
         group_id=group_id,
@@ -92,9 +85,8 @@ async def update_group(
 async def delete_group(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-
     await service.delete_group(
         uow=uow,
         group_id=group_id,
@@ -109,9 +101,8 @@ async def add_contact_to_group(
     group_id: int,
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-
     await service.add_contact(
         uow=uow,
         group_id=group_id,
@@ -127,9 +118,8 @@ async def remove_contact_from_group(
     group_id: int,
     contact_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-
     await service.remove_contact(
         uow=uow,
         group_id=group_id,
@@ -144,12 +134,9 @@ async def remove_contact_from_group(
 async def get_group_contacts(
     group_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: GroupService = Depends(get_group_service),
 ):
-    service = GroupService()
-
-    contacts = await service.get_contacts(
+    return await service.get_contacts(
         uow=uow,
         group_id=group_id,
     )
-
-    return contacts

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 
-from app.db.deps import get_uow
+from app.db.deps import get_delivery_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.delivery import DeliveryResponse
-from app.services.delivery import DeliveryService
+from app.services import DeliveryService
 
 
 router = APIRouter(
@@ -18,13 +18,10 @@ router = APIRouter(
 )
 async def get_delivery(
     delivery_id: int,
-    uow: UnitOfWork = Depends(get_uow)
+    uow: UnitOfWork = Depends(get_uow),
+    service: DeliveryService = Depends(get_delivery_service),
 ):
-    service = DeliveryService()
-    
-    delivery = await service.get_delivery(
+    return await service.get_delivery(
         uow=uow,
         delivery_id=delivery_id,
     )
-    
-    return delivery

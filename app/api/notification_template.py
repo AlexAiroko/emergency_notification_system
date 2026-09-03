@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, status
 
-from app.db.deps import get_uow
+from app.db.deps import get_template_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.notification_template import NotificationTemplateCreate, NotificationTemplateResponse, NotificationTemplateUpdate
-from app.services.notification_template import NotificationTemplateService
+from app.services import NotificationTemplateService
 
 
 router = APIRouter(
@@ -20,18 +20,15 @@ router = APIRouter(
 async def create_template(
     data: NotificationTemplateCreate,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
-    
-    template = await service.create_template(
+    return await service.create_template(
         uow=uow,
         name=data.name,
         subject=data.subject,
         body=data.body,
         is_active=data.is_active,
     )
-    
-    return template
 
 
 @router.get(
@@ -42,12 +39,9 @@ async def get_many_templates(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
-
-    templates = await service.get_many_templates(uow, limit, offset)
-    
-    return templates
+    return await service.get_many_templates(uow, limit, offset)
 
 
 @router.get(
@@ -58,12 +52,9 @@ async def get_active_templates(
     limit: int = 20,
     offset: int = 0,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
-
-    templates = await service.get_active_templates(uow, limit, offset)
-    
-    return templates
+    return await service.get_active_templates(uow, limit, offset)
 
 
 @router.get(
@@ -73,12 +64,9 @@ async def get_active_templates(
 async def get_template_by_id(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
-
-    template = await service.get_template(uow, template_id)
-    
-    return template
+    return await service.get_template(uow, template_id)
 
 
 @router.patch(
@@ -89,9 +77,8 @@ async def update_template(
     template_id: int,
     data: NotificationTemplateUpdate,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
-    
     await service.update_template(
         uow,
         template_id,
@@ -107,8 +94,8 @@ async def update_template(
 async def activate_template(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
     await service.activate_template(
         uow,
         template_id,
@@ -122,8 +109,8 @@ async def activate_template(
 async def deactivate_template(
     template_id: int,
     uow: UnitOfWork = Depends(get_uow),
+    service: NotificationTemplateService = Depends(get_template_service),
 ):
-    service = NotificationTemplateService()
     await service.deactivate_template(
         uow,
         template_id,

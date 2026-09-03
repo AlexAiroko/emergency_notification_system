@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest_asyncio
 
-from app.services.delivery import DeliveryService
+from app.services import DeliveryService
 
 
 @pytest_asyncio.fixture

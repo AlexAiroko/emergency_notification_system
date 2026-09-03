@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.providers.base import ProviderError
-from app.providers.telegram import TelegramProvider
+from app.providers import TelegramProvider
 
 
 @pytest.mark.asyncio

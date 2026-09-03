@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.services.contact_method import ContactMethodService
+from app.services import ContactMethodService
 
 
 @pytest_asyncio.fixture

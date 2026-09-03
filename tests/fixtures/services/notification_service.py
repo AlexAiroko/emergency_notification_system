@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest_asyncio
 
-from app.services.notification import NotificationService
+from app.services import NotificationService
 
 
 @pytest_asyncio.fixture

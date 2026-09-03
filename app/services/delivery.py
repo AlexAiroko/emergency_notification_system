@@ -10,7 +10,7 @@ from app.exceptions.notification import NotificationNotFoundError
 from app.models.contact_method import ChannelType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.providers.base import ProviderError
-from app.providers.provider_registry import ProviderRegistry
+from app.providers import ProviderRegistry
 from app.services.notification_template import NotificationTemplateService
 
 logger = logging.getLogger(__name__)

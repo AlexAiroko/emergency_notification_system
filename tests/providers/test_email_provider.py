@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.providers.base import ProviderError
-from app.providers.email import EmailProvider
+from app.providers import EmailProvider
 
 
 @pytest.mark.asyncio

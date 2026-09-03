@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.services.group import GroupService
+from app.services import GroupService
 
 
 @pytest_asyncio.fixture

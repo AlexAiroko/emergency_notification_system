@@ -1,10 +1,10 @@
-from app.services.contact import ContactService
-from app.services.contact_method import ContactMethodService
-from app.services.contact_import.service import ContactImportService
-from app.services.delivery import DeliveryService
-from app.services.group import GroupService
-from app.services.notification import NotificationService
-from app.services.notification_template import NotificationTemplateService
+from .contact import ContactService
+from .contact_method import ContactMethodService
+from .contact_import.service import ContactImportService
+from .delivery import DeliveryService
+from .group import GroupService
+from .notification import NotificationService
+from .notification_template import NotificationTemplateService
 
 __all__ = [
     "ContactService",

@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.models.group import Group
+from app.models import Group
 
 
 @pytest_asyncio.fixture

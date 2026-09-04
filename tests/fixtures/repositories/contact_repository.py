@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.repositories.contact import ContactRepository
+from app.repositories import ContactRepository
 
 
 @pytest_asyncio.fixture

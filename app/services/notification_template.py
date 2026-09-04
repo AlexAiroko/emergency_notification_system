@@ -11,7 +11,7 @@ from app.exceptions.notification_template import (
     TemplateInactiveError, 
     TemplateNotFoundError,
 )
-from app.models.notification_template import NotificationTemplate
+from app.models import NotificationTemplate
 
 
 

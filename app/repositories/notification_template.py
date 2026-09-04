@@ -1,4 +1,4 @@
-from app.models.notification_template import NotificationTemplate
+from app.models import NotificationTemplate
 from app.repositories.active import ActiveRepository
 
 

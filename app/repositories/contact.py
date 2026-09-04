@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.models.contact import Contact
+from app.models import Contact
 from app.repositories.active import ActiveRepository
 
 

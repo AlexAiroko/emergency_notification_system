@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.repositories.notification_template import NotificationTemplateRepository
+from app.repositories import NotificationTemplateRepository
 
 
 @pytest_asyncio.fixture

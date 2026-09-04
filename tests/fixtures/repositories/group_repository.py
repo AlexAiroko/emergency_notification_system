@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.repositories.group import GroupRepository
+from app.repositories import GroupRepository
 
 
 @pytest_asyncio.fixture

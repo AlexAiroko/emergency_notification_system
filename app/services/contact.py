@@ -7,7 +7,7 @@ from app.exceptions.contact import (
     ContactAlreadyExistsError,
     ContactNotFoundError,
 )
-from app.models.contact import Contact
+from app.models import Contact
 
 logger = logging.getLogger(__name__)
 

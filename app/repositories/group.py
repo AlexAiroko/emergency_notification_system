@@ -1,9 +1,11 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from app.models.contact import Contact
-from app.models.group import Group
-from app.models.group_contact import GroupContact
+from app.models import (
+    Contact,
+    Group,
+    GroupContact,
+)
 from app.repositories.active import ActiveRepository
 
 

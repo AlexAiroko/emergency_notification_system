@@ -9,13 +9,15 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models.contact import Contact  # noqa: F401
-from app.models.contact_method import ContactMethod  # noqa: F401
-from app.models.group import Group  # noqa: F401
-from app.models.delivery import Delivery  # noqa: F401
-from app.models.group_contact import GroupContact  # noqa: F401
-from app.models.notification import Notification  # noqa: F401
-from app.models.notification_template import NotificationTemplate  # noqa: F401
+from app.models import (
+    Contact,
+    ContactMethod,
+    Group,
+    Delivery,
+    GroupContact,
+    Notification,
+    NotificationTemplate,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent

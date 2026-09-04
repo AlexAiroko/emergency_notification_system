@@ -5,8 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.uow import UnitOfWork
 from app.exceptions.contact import ContactNotFoundError
 from app.exceptions.group import GroupAlreadyExistsError, GroupInactiveError, GroupNotFoundError
-from app.models.contact import Contact
-from app.models.group import Group
+from app.models import Contact, Group
 
 
 logger = logging.getLogger(__name__)

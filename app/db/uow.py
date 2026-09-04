@@ -4,13 +4,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories_registry import REPOSITORIES
 from app.db.session import session_maker
-from app.repositories.base import BaseRepository
-from app.repositories.contact import ContactRepository
-from app.repositories.contact_method import ContactMethodRepository
-from app.repositories.delivery import DeliveryRepository
-from app.repositories.group import GroupRepository
-from app.repositories.notification import NotificationRepository
-from app.repositories.notification_template import NotificationTemplateRepository
+from app.repositories import (
+    BaseRepository,
+    ContactRepository,
+    ContactMethodRepository,
+    DeliveryRepository,
+    GroupRepository,
+    NotificationRepository,
+    NotificationTemplateRepository,
+)
 
 
 logger = logging.getLogger(__name__)

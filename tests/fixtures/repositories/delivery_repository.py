@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.repositories.delivery import DeliveryRepository
+from app.repositories import DeliveryRepository
 
 
 @pytest_asyncio.fixture

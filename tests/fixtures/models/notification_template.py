@@ -1,6 +1,6 @@
 import pytest_asyncio
 
-from app.models.notification_template import NotificationTemplate
+from app.models import NotificationTemplate
 
 
 @pytest_asyncio.fixture

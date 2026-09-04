@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def _sweep_deliveries():
     service = NotificationService(rate_limiter=get_rate_limiter())
-
+    logger.info("Sweep started")
     try:
         async with UnitOfWork() as uow:
             groups = await service.claim_due_retries(uow)

@@ -1,5 +1,6 @@
 import asyncio
 from io import BytesIO
+import logging
 
 from fastapi import UploadFile
 from openpyxl import load_workbook
@@ -8,8 +9,12 @@ from app.exceptions.contact_import import EmptyImportFileError
 from app.services.contact_import.parsers.base import BaseContactParser
 
 
+logger = logging.getLogger(__name__)
+
+
 class ExcelParser(BaseContactParser):
     async def parse(self, file: UploadFile) -> list[dict]:
+        logger.debug("Parsing Excel file: %s", file.filename)
         await file.seek(0)
         content = await file.read()
 

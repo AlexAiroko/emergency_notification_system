@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, status
 
 from app.db.deps import get_notification_service, get_uow
@@ -6,6 +8,9 @@ from app.schemas.delivery import DeliveryResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse
 from app.services import NotificationService
 from app.tasks.notification import send_notification_task
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -63,8 +68,8 @@ async def get_notification(
 def send_notification(
     notification_id: int,
 ):
+    logger.info("Enqueuing notification %s", notification_id)
     send_notification_task.delay(notification_id)
-    
     return {"message": "Notification started"}
 
 

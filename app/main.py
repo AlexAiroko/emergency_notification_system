@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+import app.core.logging
 from app.api.exception import error_handler
 from app.api.notification_template import router as template_router
 from app.api.contact import router as contact_router

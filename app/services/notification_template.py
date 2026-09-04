@@ -180,6 +180,7 @@ class NotificationTemplateService:
         template = await self._get_template(uow, template_id)
 
         if not template.is_active:
+            logger.warning("Template %s is inactive", template_id)
             raise TemplateInactiveError(template_id)
 
         return template
@@ -190,8 +191,13 @@ class NotificationTemplateService:
         """
         
         if not body or not body.strip():
+            logger.warning("Template body is empty")
             raise TemplateBodyEmptyError()
 
         size = len(body.encode("utf-8"))
         if size > settings.MAX_MESSAGE_SIZE_BYTES:
+            logger.warning(
+                "Template body too long: %s bytes (max %s)",
+                size, settings.MAX_MESSAGE_SIZE_BYTES,
+            )
             raise MessageTooLongError(size, settings.MAX_MESSAGE_SIZE_BYTES)

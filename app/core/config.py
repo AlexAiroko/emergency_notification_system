@@ -1,4 +1,19 @@
+import enum
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LogLevel(str, enum.Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+class LogFormat(str, enum.Enum):
+    TEXT = "text"
+    JSON = "json"
 
 
 class Settings(BaseSettings):
@@ -70,5 +85,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_TELEGRAM: int
 
     METRICS_ENABLED: bool
+
+    LOG_LEVEL: LogLevel
+    LOG_FORMAT: LogFormat
 
 settings = Settings()

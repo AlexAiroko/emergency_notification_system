@@ -97,8 +97,8 @@ class ContactService:
         contact_id: int,
     ) -> None:
         await self.get_contact(uow, contact_id)
-
         await uow.contact_repo.activate(contact_id)
+        logger.info("Contact %s activated", contact_id)
 
     async def deactivate_contact(
         self,
@@ -106,5 +106,5 @@ class ContactService:
         contact_id: int,
     ) -> None:
         await self.get_contact(uow, contact_id)
-
         await uow.contact_repo.deactivate(contact_id)
+        logger.info("Contact %s deactivated", contact_id)

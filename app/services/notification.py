@@ -126,6 +126,7 @@ class NotificationService:
             raise NotificationNotFoundError(notification_id)
 
         await uow.notification_repo.mark_started(notification_id)
+        logger.info("Notification %s started", notification_id)
 
         collector = get_metrics_collector()
         collector.notifications_in_progress.inc()
@@ -137,6 +138,10 @@ class NotificationService:
     ) -> list[list[int]]:
         delivery_ids = await uow.delivery_repo.get_ready_for_dispatch(notification_id)
         batches = chunk(delivery_ids, settings.DELIVERY_BATCH_SIZE)
+        logger.info(
+            "Notification %s: %s deliveries → %s batches",
+            notification_id, len(delivery_ids), len(batches),
+        )
         return batches
 
     async def finalize_notification(
@@ -225,11 +230,17 @@ class NotificationService:
         groups: dict[int, list[int]] = {}
         for delivery in deliveries:
             groups.setdefault(delivery.notification_id, []).append(delivery.id)
+
+        logger.info(
+            "Claimed %s deliveries for retry across %s notifications",
+            len(deliveries), len(groups),
+        )
         return groups
 
     async def finalize_stuck_notifications(self, uow: UnitOfWork) -> int:
         stuck = await uow.notification_repo.get_stuck_in_progress_ids()
         for notification_id in stuck:
             await self.finalize_notification(uow, notification_id)
+        logger.info("Finalized %s stuck notifications", len(stuck))
         return len(stuck)
 

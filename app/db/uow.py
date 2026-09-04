@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories_registry import REPOSITORIES
@@ -9,6 +11,9 @@ from app.repositories.delivery import DeliveryRepository
 from app.repositories.group import GroupRepository
 from app.repositories.notification import NotificationRepository
 from app.repositories.notification_template import NotificationTemplateRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class UnitOfWork:
@@ -24,6 +29,7 @@ class UnitOfWork:
 
     async def __aenter__(self):
         self.session = session_maker()
+        logger.debug("Session opened")
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -31,24 +37,33 @@ class UnitOfWork:
             if exc_type is None:
                 await self.commit()
             else:
+                logger.warning("Rolling back due to %s", exc_type.__name__)
                 await self.rollback()
         finally:
             if self.session is not None:
                 await self.session.close()
-
+                logger.debug("Session closed")
         return False
     
     async def commit(self) -> None:
         if self.session is None:
             raise RuntimeError("UnitOfWork is not initialized")
 
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except Exception:
+            logger.exception("Commit failed")
+            raise
 
     async def rollback(self) -> None:
         if self.session is None:
             raise RuntimeError("UnitOfWork is not initialized")
         
-        await self.session.rollback()
+        try:
+            await self.session.rollback()
+        except Exception:
+            logger.exception("Rollback failed")
+            raise
 
     def _get_repository(self, name: str) -> BaseRepository:
         if self.session is None:

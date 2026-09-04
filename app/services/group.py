@@ -57,10 +57,10 @@ class GroupService:
             raise GroupAlreadyExistsError() from exc
         
         logger.info(
-                "Created group %s (name=%s)",
-                group.id,
-                group.name,
-            )
+            "Created group %s (name=%s)",
+            group.id,
+            group.name,
+        )
 
         return group
     
@@ -175,6 +175,7 @@ class GroupService:
 
         group = await self._get_group(uow, group_id)
         if not group.is_active:
+            logger.warning("Group %s is inactive", group_id)
             raise GroupInactiveError(group_id)
         
         return group

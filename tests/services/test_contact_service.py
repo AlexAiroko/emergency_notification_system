@@ -110,3 +110,45 @@ async def test_update_contact_not_found(contact_service, uow):
         999,
         name="New Name",
     )
+
+
+@pytest.mark.asyncio
+async def test_activate_contact(contact_service, uow):
+    uow.contact_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.contact_repo.activate = AsyncMock()
+
+    await contact_service.activate_contact(uow, 1)
+
+    uow.contact_repo.get.assert_awaited_once_with(1)
+    uow.contact_repo.activate.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_activate_contact_not_found(contact_service, uow):
+    uow.contact_repo.get = AsyncMock(return_value=None)
+
+    with pytest.raises(ContactNotFoundError):
+        await contact_service.activate_contact(uow, 999)
+
+    uow.contact_repo.activate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_deactivate_contact(contact_service, uow):
+    uow.contact_repo.get = AsyncMock(return_value=SimpleNamespace(id=1))
+    uow.contact_repo.deactivate = AsyncMock()
+
+    await contact_service.deactivate_contact(uow, 1)
+
+    uow.contact_repo.get.assert_awaited_once_with(1)
+    uow.contact_repo.deactivate.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_deactivate_contact_not_found(contact_service, uow):
+    uow.contact_repo.get = AsyncMock(return_value=None)
+
+    with pytest.raises(ContactNotFoundError):
+        await contact_service.deactivate_contact(uow, 999)
+
+    uow.contact_repo.deactivate.assert_not_called()

@@ -7,12 +7,14 @@ from app.core.utils import utc_now
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
+from app.exceptions.notification_template import TemplateRenderError
 from app.metrics.registry import get_metrics_collector
 from app.models.contact_method import ChannelType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.providers.base import ProviderError
 from app.providers import ProviderRegistry
 from app.services.notification_template import NotificationTemplateService
+from app.services.template_renderer import TemplateRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +109,19 @@ class DeliveryService:
                 collector.deliveries_total.inc(channel=delivery.channel.value, status="rate_limited")
                 return
 
+            contact = await uow.contact_repo.get(delivery.contact_id)
+
+            rendered_subject = TemplateRenderer.render_subject(
+                template, contact, notification.variables,
+            )
+            rendered_body = TemplateRenderer.render_body(
+                template, contact, notification.variables,
+            )
+
             provider_message_id = await provider.send(
                 to=delivery.address,
-                subject=template.subject,
-                body=template.body,
+                subject=rendered_subject,
+                body=rendered_body,
             )
 
             await uow.delivery_repo.mark_sent(
@@ -151,6 +162,15 @@ class DeliveryService:
 
                 collector = get_metrics_collector()
                 collector.deliveries_total.inc(channel=delivery.channel.value, status="failed")
+        except TemplateRenderError as exc:
+            await uow.delivery_repo.mark_failed(
+                delivery.id,
+                error_message=str(exc),
+            )
+            logger.error("Template render failed for delivery %s: %s", delivery.id, exc)
+
+            collector = get_metrics_collector()
+            collector.deliveries_total.inc(channel=delivery.channel.value, status="failed")
 
     async def send_pending(
         self,

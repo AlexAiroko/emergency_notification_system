@@ -40,7 +40,9 @@ async def test_create_notification(notification_service, uow):
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     result = await notification_service.create_notification(
@@ -64,6 +66,7 @@ async def test_create_notification(notification_service, uow):
     uow.notification_repo.create.assert_awaited_once_with(
         template_id=5,
         group_id=7,
+        variables={},
     )
 
     uow.group_repo.get_contacts_for_dispatch.assert_awaited_once_with(7)
@@ -95,7 +98,9 @@ async def test_create_notification_without_contacts(notification_service, uow):
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     result = await notification_service.create_notification(
@@ -123,7 +128,9 @@ async def test_create_notification_with_contact_without_methods(notification_ser
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     await notification_service.create_notification(
@@ -369,7 +376,9 @@ async def test_create_notification_skips_inactive_methods(notification_service, 
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     await notification_service.create_notification(
@@ -408,7 +417,9 @@ async def test_create_notification_raises_too_many_deliveries(notification_servi
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     with patch("app.services.notification.settings.MAX_DELIVERIES_PER_NOTIFICATION", 2):
@@ -446,7 +457,9 @@ async def test_create_notification_passes_at_exact_limit(notification_service, u
     uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
     uow.delivery_repo.create_bulk = AsyncMock()
 
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock()
 
     with patch("app.services.notification.settings.MAX_DELIVERIES_PER_NOTIFICATION", 2):
@@ -462,7 +475,9 @@ async def test_create_notification_passes_at_exact_limit(notification_service, u
 
 @pytest.mark.asyncio
 async def test_create_notification_raises_for_inactive_group(notification_service, uow):
-    notification_service.template_service.ensure_template_is_active = AsyncMock()
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Hello {{name}}", subject=None),
+    )
     notification_service.group_service.ensure_group_is_active = AsyncMock(
         side_effect=GroupInactiveError(7),
     )
@@ -477,3 +492,56 @@ async def test_create_notification_raises_for_inactive_group(notification_servic
     uow.notification_repo.create.assert_not_called()
     uow.group_repo.get_contacts_for_dispatch.assert_not_called()
     uow.delivery_repo.create_bulk.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_notification(notification_service, uow):
+    notification = SimpleNamespace(id=42, template_id=5)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+
+    result = await notification_service.get_notification(uow, 42)
+
+    assert result is notification
+    uow.notification_repo.get_with_relations.assert_awaited_once_with(42)
+
+
+@pytest.mark.asyncio
+async def test_get_notification_not_found(notification_service, uow):
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=None)
+
+    with pytest.raises(NotificationNotFoundError, match="Notification 99 not found"):
+        await notification_service.get_notification(uow, 99)
+
+
+@pytest.mark.asyncio
+async def test_create_notification_with_custom_variables(notification_service, uow):
+    notification = SimpleNamespace(id=1)
+
+    contact = SimpleNamespace(
+        id=100,
+        contact_methods=[
+            SimpleNamespace(id=10, channel=ChannelType.EMAIL, address="a@b.com", is_active=True),
+        ],
+    )
+
+    uow.notification_repo.create = AsyncMock(return_value=notification)
+    uow.group_repo.get_contacts_for_dispatch = AsyncMock(return_value=[contact])
+    uow.delivery_repo.create_bulk = AsyncMock()
+
+    notification_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=SimpleNamespace(body="Status: {{status}}", subject=None),
+    )
+    notification_service.group_service.ensure_group_is_active = AsyncMock()
+
+    await notification_service.create_notification(
+        uow,
+        template_id=5,
+        group_id=7,
+        variables={"status": "critical"},
+    )
+
+    uow.notification_repo.create.assert_awaited_once_with(
+        template_id=5,
+        group_id=7,
+        variables={"status": "critical"},
+    )

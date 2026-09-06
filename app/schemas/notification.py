@@ -6,6 +6,7 @@ from app.models.notification import NotificationStatus
 class NotificationCreate(BaseModel):
     template_id: int
     group_id: int
+    variables: dict = {}
 
 
 class NotificationResponse(BaseModel):
@@ -15,3 +16,4 @@ class NotificationResponse(BaseModel):
     template_id: int
     group_id: int
     status: NotificationStatus
+    variables: dict = {}

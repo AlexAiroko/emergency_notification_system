@@ -1,10 +1,11 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
+from app.exceptions.notification_template import TemplateRenderError
 from app.models.contact_method import ChannelType
 from app.models.delivery import DeliveryStatus
 from app.providers.base import ProviderError
@@ -17,11 +18,15 @@ async def test_send_success(delivery_service, uow):
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        contact_id=100,
         attempts=0,
     )
 
+    contact = SimpleNamespace(id=100, name="Test User")
+
     notification = SimpleNamespace(
         template_id=100,
+        variables={},
     )
 
     template = SimpleNamespace(
@@ -34,6 +39,7 @@ async def test_send_success(delivery_service, uow):
 
     uow.delivery_repo.get = AsyncMock(return_value=delivery)
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
     uow.delivery_repo.mark_sent = AsyncMock()
     uow.delivery_repo.mark_failed = AsyncMock()
 
@@ -42,11 +48,24 @@ async def test_send_success(delivery_service, uow):
     )
     delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    await delivery_service.send_delivery(uow, 1)
+    with patch("app.services.delivery.TemplateRenderer") as mock_renderer:
+        mock_renderer.render_subject.return_value = "Subject"
+        mock_renderer.render_body.return_value = "Body"
+
+        await delivery_service.send_delivery(uow, 1)
 
     delivery_service.template_service.ensure_template_is_active.assert_awaited_once_with(
         uow,
         100,
+    )
+
+    uow.contact_repo.get.assert_awaited_once_with(100)
+
+    mock_renderer.render_subject.assert_called_once_with(
+        template, contact, {},
+    )
+    mock_renderer.render_body.assert_called_once_with(
+        template, contact, {},
     )
 
     provider.send.assert_awaited_once_with(
@@ -101,11 +120,15 @@ async def test_send_provider_error(delivery_service, uow):
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        contact_id=100,
         attempts=0,
     )
 
+    contact = SimpleNamespace(id=100, name="Test User")
+
     notification = SimpleNamespace(
         template_id=100,
+        variables={},
     )
 
     template = SimpleNamespace(
@@ -120,6 +143,7 @@ async def test_send_provider_error(delivery_service, uow):
 
     uow.delivery_repo.get = AsyncMock(return_value=delivery)
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
     uow.delivery_repo.mark_sent = AsyncMock()
     uow.delivery_repo.mark_failed = AsyncMock()
     uow.delivery_repo.mark_retry = AsyncMock()
@@ -129,7 +153,11 @@ async def test_send_provider_error(delivery_service, uow):
     )
     delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    await delivery_service.send_delivery(uow, 1)
+    with patch("app.services.delivery.TemplateRenderer") as mock_renderer:
+        mock_renderer.render_subject.return_value = "Subject"
+        mock_renderer.render_body.return_value = "Body"
+
+        await delivery_service.send_delivery(uow, 1)
 
     uow.delivery_repo.mark_retry.assert_awaited_once()
     assert uow.delivery_repo.mark_retry.call_args.kwargs["error_message"] == "SMTP failed"
@@ -145,11 +173,15 @@ async def test_send_provider_error_retries_exhausted(delivery_service, uow):
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        contact_id=100,
         attempts=5,
     )
 
+    contact = SimpleNamespace(id=100, name="Test User")
+
     notification = SimpleNamespace(
         template_id=100,
+        variables={},
     )
 
     template = SimpleNamespace(
@@ -164,6 +196,7 @@ async def test_send_provider_error_retries_exhausted(delivery_service, uow):
 
     uow.delivery_repo.get = AsyncMock(return_value=delivery)
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
     uow.delivery_repo.mark_sent = AsyncMock()
     uow.delivery_repo.mark_failed = AsyncMock()
     uow.delivery_repo.mark_retry = AsyncMock()
@@ -173,7 +206,11 @@ async def test_send_provider_error_retries_exhausted(delivery_service, uow):
     )
     delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    await delivery_service.send_delivery(uow, 1)
+    with patch("app.services.delivery.TemplateRenderer") as mock_renderer:
+        mock_renderer.render_subject.return_value = "Subject"
+        mock_renderer.render_body.return_value = "Body"
+
+        await delivery_service.send_delivery(uow, 1)
 
     uow.delivery_repo.mark_failed.assert_awaited_once_with(
         1,
@@ -253,10 +290,13 @@ async def test_send_delivery_rate_limited_schedules_retry(delivery_service, uow)
         notification_id=10,
         channel=ChannelType.EMAIL,
         address="user@mail.com",
+        contact_id=100,
         attempts=0,
     )
 
-    notification = SimpleNamespace(template_id=100)
+    contact = SimpleNamespace(id=100, name="Test User")
+
+    notification = SimpleNamespace(template_id=100, variables={})
     template = SimpleNamespace(subject="Subject", body="Body")
 
     provider = Mock()
@@ -264,6 +304,7 @@ async def test_send_delivery_rate_limited_schedules_retry(delivery_service, uow)
 
     uow.delivery_repo.get = AsyncMock(return_value=delivery)
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
     uow.delivery_repo.mark_sent = AsyncMock()
     uow.delivery_repo.mark_retry = AsyncMock()
 
@@ -291,10 +332,13 @@ async def test_send_delivery_rate_limiter_called_with_correct_key(delivery_servi
         notification_id=10,
         channel=ChannelType.TELEGRAM,
         address="123456789",
+        contact_id=100,
         attempts=0,
     )
 
-    notification = SimpleNamespace(template_id=100)
+    contact = SimpleNamespace(id=100, name="Test User")
+
+    notification = SimpleNamespace(template_id=100, variables={})
     template = SimpleNamespace(subject="Subject", body="Body")
 
     provider = Mock()
@@ -302,6 +346,7 @@ async def test_send_delivery_rate_limiter_called_with_correct_key(delivery_servi
 
     uow.delivery_repo.get = AsyncMock(return_value=delivery)
     uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
     uow.delivery_repo.mark_sent = AsyncMock()
 
     delivery_service.template_service.ensure_template_is_active = AsyncMock(
@@ -309,10 +354,56 @@ async def test_send_delivery_rate_limiter_called_with_correct_key(delivery_servi
     )
     delivery_service.provider_registry.get = Mock(return_value=provider)
 
-    await delivery_service.send_delivery(uow, 1)
+    with patch("app.services.delivery.TemplateRenderer") as mock_renderer:
+        mock_renderer.render_subject.return_value = "Subject"
+        mock_renderer.render_body.return_value = "Body"
+
+        await delivery_service.send_delivery(uow, 1)
 
     delivery_service.rate_limiter.acquire.assert_awaited_once_with(
         key="rate_limit:telegram",
         limit=delivery_service.rate_limiter.acquire.call_args.kwargs["limit"],
         window_seconds=60,
     )
+
+
+@pytest.mark.asyncio
+async def test_send_delivery_template_render_error(delivery_service, uow):
+    delivery = SimpleNamespace(
+        id=1,
+        notification_id=10,
+        channel=ChannelType.EMAIL,
+        address="user@mail.com",
+        contact_id=100,
+        attempts=0,
+    )
+
+    contact = SimpleNamespace(id=100, name="Test User")
+    notification = SimpleNamespace(template_id=100, variables={})
+    template = SimpleNamespace(subject="Subject", body="Body")
+
+    uow.delivery_repo.get = AsyncMock(return_value=delivery)
+    uow.notification_repo.get_with_relations = AsyncMock(return_value=notification)
+    uow.contact_repo.get = AsyncMock(return_value=contact)
+    uow.delivery_repo.mark_sent = AsyncMock()
+    uow.delivery_repo.mark_failed = AsyncMock()
+
+    delivery_service.template_service.ensure_template_is_active = AsyncMock(
+        return_value=template,
+    )
+
+    with patch("app.services.delivery.TemplateRenderer") as mock_renderer:
+        mock_renderer.render_subject.side_effect = TemplateRenderError("Bad var")
+
+        await delivery_service.send_delivery(uow, 1)
+
+    uow.delivery_repo.mark_failed.assert_awaited_once_with(
+        1,
+        error_message="Bad var",
+    )
+    uow.delivery_repo.mark_sent.assert_not_called()
+
+
+def test_get_rate_limit_fallback(delivery_service):
+    limit = delivery_service._get_rate_limit(ChannelType.SMS)
+    assert limit == 100

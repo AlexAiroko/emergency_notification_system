@@ -32,6 +32,7 @@ async def create_notification(
         uow=uow,
         template_id=data.template_id,
         group_id=data.group_id,
+        variables=data.variables,
     )
 
 

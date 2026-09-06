@@ -7,6 +7,7 @@ from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import TooManyDeliveriesError
 from app.exceptions.notification import NotificationNotFoundError
+from app.exceptions.notification_template import TemplateRenderError
 from app.metrics.registry import get_metrics_collector
 from app.models.contact import Contact
 from app.models.delivery import Delivery, DeliveryStatus
@@ -14,6 +15,7 @@ from app.models.notification import Notification, NotificationStatus
 from app.services.delivery import DeliveryService
 from app.services.group import GroupService
 from app.services.notification_template import NotificationTemplateService
+from app.services.template_renderer import TemplateRenderer
 
 
 logger = logging.getLogger(__name__)
@@ -53,22 +55,30 @@ class NotificationService:
         uow: UnitOfWork,
         template_id: int,
         group_id: int,
+        variables: dict | None = None
     ) -> Notification:
         """
         Creates a Notification with the PENDING status and generates a Delivery
         for each ContactMethod of each contact in the group.
         """
 
-        await self.template_service.ensure_template_is_active(
+        template = await self.template_service.ensure_template_is_active(
             uow,
             template_id,
         )
+
+        variables = variables or {}
+
+        missing = TemplateRenderer.validate_variables(template.body, variables, subject=template.subject)
+        if missing:
+            raise TemplateRenderError(f"Missing template variables: {', '.join(missing)}")
 
         await self.group_service.ensure_group_is_active(uow, group_id)
 
         notification = await uow.notification_repo.create(
             template_id=template_id,
             group_id=group_id,
+            variables=variables,
         )
 
         logger.info(

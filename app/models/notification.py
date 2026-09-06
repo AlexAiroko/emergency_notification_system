@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,6 +40,13 @@ class Notification(Base):
         nullable=False,
         default=NotificationStatus.PENDING,
         server_default="pending",
+    )
+
+    variables: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        server_default="{}",
     )
     
     created_at: Mapped[DateTime] = mapped_column(

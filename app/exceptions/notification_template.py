@@ -1,4 +1,6 @@
-from app.exceptions.base import ConflictError, NotFoundError, ValidationError
+from fastapi import status
+
+from app.exceptions.base import AppError, ConflictError, NotFoundError, ValidationError
 
 
 class TemplateNotFoundError(NotFoundError):
@@ -33,3 +35,11 @@ class MessageTooLongError(ValidationError):
     code = "message_too_long"
     def __init__(self, size: int, max_size: int) -> None:
         super().__init__(f"Message size {size} bytes exceeds limit of {max_size} bytes")
+
+
+class TemplateRenderError(AppError):
+    code = "template_render_error"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from app.db.deps import get_contact_import_service, get_contact_service, get_uow
 from app.db.uow import UnitOfWork
 from app.schemas.contact import ContactCreate, ContactResponse, ContactUpdate
-from app.schemas.contact_import import ContactImportResponse, ImportErrorItem
+from app.schemas.contact_import import ImportJobResponse
 from app.services import ContactService, ContactImportService
 
 
@@ -115,22 +115,26 @@ async def deactivate_contact(
 
 @router.post(
     "/import",
-    response_model=ContactImportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def import_contacts(
     file: UploadFile = File(),
     uow: UnitOfWork = Depends(get_uow),
     service: ContactImportService = Depends(get_contact_import_service),
 ):
-    result = await service.import_contacts(uow, file)
-    
-    return ContactImportResponse(
-        message="Contacts import completed",
-        total=result.total,
-        imported=result.imported,
-        skipped=result.skipped,
-        errors=[
-            ImportErrorItem(**err)
-            for err in result.errors
-        ],
-    )
+    job = await service.start_import(uow, file)
+
+    return ImportJobResponse.model_validate(job)
+
+
+@router.get(
+    "/import/{job_id}",
+)
+async def get_import_status(
+    job_id: int,
+    uow: UnitOfWork = Depends(get_uow),
+    service: ContactImportService = Depends(get_contact_import_service),
+):
+    job = await service.get_import_status(uow, job_id)
+
+    return ImportJobResponse.model_validate(job)

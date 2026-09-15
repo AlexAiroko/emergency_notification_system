@@ -2,120 +2,63 @@ import logging
 
 from fastapi import UploadFile
 
+from app.core.config import settings
+from app.core.s3 import get_s3_client
+from app.core.utils import sanitize_filename
 from app.db.uow import UnitOfWork
-from app.exceptions.contact_import import AbsentNameFieldError
-from app.models.contact_method import ChannelType
-from app.services.contact import ContactService
-from app.services.contact_import.parser_factory import ParserFactory
-from app.services.contact_import.result import ImportResult
-from app.services.contact_method import ContactMethodService
+from app.exceptions.contact_import import (
+    FileTooLargeError,
+    ImportJobNotFoundError,
+    UnsupportedImportFileError,
+)
+from app.models.import_job import ImportJob
+from app.tasks.contact_import import import_contacts_task
 
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_EXTENSIONS = {"csv", "xlsx"}
+
 
 class ContactImportService:
-    def __init__(self):
-        self.contact_service = ContactService()
-        self.contact_method_service = ContactMethodService()
-
-    async def import_contacts(
+    async def start_import(
         self,
         uow: UnitOfWork,
         file: UploadFile,
-    ) -> ImportResult:
-        """
-        Imports contacts from CSV/XLSX.
+    ) -> ImportJob:
+        if not file.filename:
+            raise UnsupportedImportFileError("<unknown>")
 
-        Returns:
-            number of imported contacts.
-        """
-        
-        parser = ParserFactory.get(file.filename)
-        rows = await parser.parse(file)
-        
-        result = ImportResult(total=len(rows))
+        ext = file.filename.rsplit(".", 1)[-1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise UnsupportedImportFileError(file.filename)
 
-        logger.info(
-            "Starting import of %s contacts from '%s'",
-            result.total,
-            file.filename,
-        )
+        content = await file.read()
 
-        for idx, row in enumerate(rows, start=1):
-            try:
-                imported = await self._import_row(uow, row)
+        if len(content) > settings.MAX_FILE_SIZE_BYTES:
+            raise FileTooLargeError()
 
-                if imported:
-                    result.imported += 1
-                else:
-                    result.skipped += 1
+        job = await uow.import_job_repo.create(filename=file.filename)
+        await uow.commit()
 
-            except Exception as exc:
-                result.skipped += 1
-                result.errors.append(
-                    {
-                        "row": idx,
-                        "reason": str(exc),
-                    }
-                )
+        s3 = get_s3_client()
+        object_name = f"{settings.IMPORT_DIR}/{job.id}/{sanitize_filename(file.filename)}"
+        s3.upload(object_name, content)
 
-                logger.warning(
-                    "Row %s import failed: %s",
-                    idx,
-                    exc,
-                )
+        import_contacts_task.delay(job.id)
 
         logger.info(
-            "Import finished: total=%s imported=%s skipped=%s errors=%s",
-            result.total,
-            result.imported,
-            result.skipped,
-            len(result.errors),
+            "Import job %s created (file=%s, %s bytes)",
+            job.id, file.filename, len(content),
         )
+        return job
 
-        return result
-
-    async def _import_row(self, uow: UnitOfWork, row: dict) -> bool:
-        """
-        Returns:
-        - True -> imported
-        - False -> skipped
-        """
-
-        if not row.get("name"):
-            raise AbsentNameFieldError()
-        
-        contact = await self.contact_service.create_contact(
-            uow=uow,
-            external_id=row.get("external_id"),
-            name=row["name"],
-            is_active=True,
-        )
-
-        await self._create_methods(uow, contact.id, row)
-
-        return True
-    
-    async def _create_methods(
-            self,
-            uow: UnitOfWork,
-            contact_id: int,
-            row: dict,
-    ) -> None:
-        for channel, field in (
-            (ChannelType.EMAIL, "email"),
-            (ChannelType.TELEGRAM, "telegram"),
-            (ChannelType.SMS, "phone"),
-        ):
-            address = row.get(field)
-
-            if not address or not address.strip():
-                continue
-
-            await self.contact_method_service.create_method(
-                uow=uow,
-                contact_id=contact_id,
-                channel=channel,
-                address=str(address).strip(),
-            )
+    async def get_import_status(
+        self,
+        uow: UnitOfWork,
+        job_id: int,
+    ) -> ImportJob:
+        job = await uow.import_job_repo.get(job_id)
+        if job is None:
+            raise ImportJobNotFoundError(job_id)
+        return job

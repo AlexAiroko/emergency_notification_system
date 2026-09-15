@@ -1,5 +1,5 @@
 from io import BytesIO
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,7 +8,6 @@ from app.services.contact_import.parsers.excel_parser import ExcelParser
 
 
 def _make_xlsx(rows: list[list]) -> bytes:
-    """Helper: creates a minimal XLSX file in memory."""
     from openpyxl import Workbook
 
     wb = Workbook()
@@ -31,12 +30,10 @@ async def test_parse_valid_xlsx():
         ["ext-2", "Bob", "", "@bob", "+123456"],
     ])
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = ExcelParser()
-    rows = await parser.parse(file)
+    rows = []
+    async for row in parser.parse("contacts.xlsx", content):
+        rows.append(row)
 
     assert len(rows) == 2
     assert rows[0]["name"] == "Alice"
@@ -49,14 +46,11 @@ async def test_parse_valid_xlsx():
 async def test_parse_empty_xlsx():
     content = _make_xlsx([])
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = ExcelParser()
 
     with pytest.raises(EmptyImportFileError):
-        await parser.parse(file)
+        async for _ in parser.parse("contacts.xlsx", content):
+            pass
 
 
 @pytest.mark.asyncio
@@ -66,11 +60,21 @@ async def test_parse_invalid_headers():
         ["val1", "val2", "val3"],
     ])
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = ExcelParser()
 
     with pytest.raises(InvalidImportHeaderError):
-        await parser.parse(file)
+        async for _ in parser.parse("contacts.xlsx", content):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_parse_xlsx_no_active_sheet():
+    mock_wb = MagicMock()
+    mock_wb.active = None
+
+    with patch("app.services.contact_import.parsers.excel_parser.load_workbook", return_value=mock_wb):
+        parser = ExcelParser()
+
+        with pytest.raises(EmptyImportFileError):
+            async for _ in parser.parse("empty.xlsx", b"fake"):
+                pass

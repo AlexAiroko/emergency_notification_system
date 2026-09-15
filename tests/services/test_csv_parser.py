@@ -1,5 +1,3 @@
-from unittest.mock import AsyncMock, Mock
-
 import pytest
 
 from app.exceptions.contact_import import EmptyImportFileError, InvalidImportHeaderError
@@ -18,12 +16,10 @@ async def test_parse_valid_csv():
         "ext-2,Bob,,@bob,+123456\n"
     )
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = CsvParser()
-    rows = await parser.parse(file)
+    rows = []
+    async for row in parser.parse("contacts.csv", content):
+        rows.append(row)
 
     assert len(rows) == 2
     assert rows[0]["name"] == "Alice"
@@ -36,12 +32,10 @@ async def test_parse_valid_csv():
 async def test_parse_empty_csv_no_rows():
     content = _make_csv("external_id,name,email,telegram,phone\n")
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = CsvParser()
-    rows = await parser.parse(file)
+    rows = []
+    async for row in parser.parse("contacts.csv", content):
+        rows.append(row)
 
     assert rows == []
 
@@ -50,25 +44,36 @@ async def test_parse_empty_csv_no_rows():
 async def test_parse_no_headers():
     content = _make_csv("")
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = CsvParser()
 
     with pytest.raises(EmptyImportFileError):
-        await parser.parse(file)
+        async for _ in parser.parse("contacts.csv", content):
+            pass
 
 
 @pytest.mark.asyncio
 async def test_parse_invalid_headers():
     content = _make_csv("wrong,headers,here\nval1,val2,val3\n")
 
-    file = Mock()
-    file.seek = AsyncMock()
-    file.read = AsyncMock(return_value=content)
-
     parser = CsvParser()
 
     with pytest.raises(InvalidImportHeaderError):
-        await parser.parse(file)
+        async for _ in parser.parse("contacts.csv", content):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_parse_csv_with_bom():
+    content = (
+        b"\xef\xbb\xbf"
+        b"external_id,name,email,telegram,phone\n"
+        b"ext-1,Alice,alice@test.com,@alice,\n"
+    )
+
+    parser = CsvParser()
+    rows = []
+    async for row in parser.parse("contacts.csv", content):
+        rows.append(row)
+
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Alice"

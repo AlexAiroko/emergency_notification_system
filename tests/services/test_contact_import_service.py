@@ -3,171 +3,115 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.models.contact_method import ChannelType
+from app.exceptions.contact_import import (
+    FileTooLargeError,
+    ImportJobNotFoundError,
+    UnsupportedImportFileError,
+)
 
 
 @pytest.mark.asyncio
-@patch("app.services.contact_import.service.ContactMethodService")
-@patch("app.services.contact_import.service.ContactService")
-@patch("app.services.contact_import.service.ParserFactory")
-async def test_import_one_transaction(mock_parser_cls, mock_contact_svc_cls, mock_method_svc_cls):
+async def test_start_import():
     from app.services.contact_import.service import ContactImportService
 
-    mock_parser = Mock()
-    mock_parser.parse = AsyncMock(return_value=[
-        {"name": "Alice", "email": "alice@test.com"},
-        {"name": "Bob", "telegram": "@bob"},
-    ])
-    mock_parser_cls.get.return_value = mock_parser
+    job = SimpleNamespace(id=1, filename="contacts.csv")
 
-    mock_contact_svc = Mock()
-    mock_contact_svc.create_contact = AsyncMock(return_value=SimpleNamespace(id=1))
-    mock_contact_svc_cls.return_value = mock_contact_svc
+    mock_uow = Mock()
+    mock_uow.import_job_repo = Mock()
+    mock_uow.import_job_repo.create = AsyncMock(return_value=job)
+    mock_uow.commit = AsyncMock()
 
-    mock_method_svc = Mock()
-    mock_method_svc.create_method = AsyncMock()
-    mock_method_svc_cls.return_value = mock_method_svc
+    mock_file = Mock()
+    mock_file.filename = "contacts.csv"
+    mock_file.read = AsyncMock(return_value=b"file content")
 
-    uow = Mock()
-    file = Mock()
-    file.filename = "contacts.csv"
+    with patch("app.services.contact_import.service.get_s3_client") as mock_s3_cls, \
+         patch("app.services.contact_import.service.import_contacts_task") as mock_task:
+        mock_s3 = Mock()
+        mock_s3_cls.return_value = mock_s3
 
-    service = ContactImportService()
-    result = await service.import_contacts(uow=uow, file=file)
+        service = ContactImportService()
+        result = await service.start_import(mock_uow, mock_file)
 
-    assert result.total == 2
-    assert result.imported == 2
-    assert result.skipped == 0
-    assert result.errors == []
-
-    assert mock_contact_svc.create_contact.await_count == 2
-    assert mock_method_svc.create_method.await_count == 2
+        assert result is job
+        mock_uow.import_job_repo.create.assert_awaited_once_with(filename="contacts.csv")
+        mock_uow.commit.assert_awaited()
+        mock_s3.upload.assert_called_once_with("imports/1/contacts.csv", b"file content")
+        mock_task.delay.assert_called_once_with(1)
 
 
 @pytest.mark.asyncio
-@patch("app.services.contact_import.service.ContactMethodService")
-@patch("app.services.contact_import.service.ContactService")
-@patch("app.services.contact_import.service.ParserFactory")
-async def test_import_skips_empty_name(mock_parser_cls, mock_contact_svc_cls, mock_method_svc_cls):
+async def test_start_import_no_filename():
     from app.services.contact_import.service import ContactImportService
 
-    mock_parser = Mock()
-    mock_parser.parse = AsyncMock(return_value=[
-        {"name": "", "email": "test@test.com"},
-    ])
-    mock_parser_cls.get.return_value = mock_parser
-
-    mock_contact_svc = Mock()
-    mock_contact_svc.create_contact = AsyncMock()
-    mock_contact_svc_cls.return_value = mock_contact_svc
-
-    mock_method_svc = Mock()
-    mock_method_svc_cls.return_value = mock_method_svc
-
-    uow = Mock()
-    file = Mock()
-    file.filename = "contacts.csv"
+    mock_uow = Mock()
+    mock_file = Mock()
+    mock_file.filename = None
 
     service = ContactImportService()
-    result = await service.import_contacts(uow=uow, file=file)
 
-    assert result.total == 1
-    assert result.imported == 0
-    assert result.skipped == 1
-    assert len(result.errors) == 1
-    assert result.errors[0]["row"] == 1
-
-    mock_contact_svc.create_contact.assert_not_awaited()
+    with pytest.raises(UnsupportedImportFileError):
+        await service.start_import(mock_uow, mock_file)
 
 
 @pytest.mark.asyncio
-@patch("app.services.contact_import.service.ContactMethodService")
-@patch("app.services.contact_import.service.ContactService")
-@patch("app.services.contact_import.service.ParserFactory")
-async def test_import_collects_errors(mock_parser_cls, mock_contact_svc_cls, mock_method_svc_cls):
+async def test_start_import_unsupported_ext():
     from app.services.contact_import.service import ContactImportService
 
-    mock_parser = Mock()
-    mock_parser.parse = AsyncMock(return_value=[
-        {"name": "Alice", "email": "alice@test.com"},
-        {"name": ""},  # missing name -> error
-        {"name": "Bob", "telegram": "@bob"},
-    ])
-    mock_parser_cls.get.return_value = mock_parser
-
-    mock_contact_svc = Mock()
-    mock_contact_svc.create_contact = AsyncMock(return_value=SimpleNamespace(id=1))
-    mock_contact_svc_cls.return_value = mock_contact_svc
-
-    mock_method_svc = Mock()
-    mock_method_svc.create_method = AsyncMock()
-    mock_method_svc_cls.return_value = mock_method_svc
-
-    uow = Mock()
-    file = Mock()
-    file.filename = "contacts.csv"
+    mock_uow = Mock()
+    mock_file = Mock()
+    mock_file.filename = "data.json"
 
     service = ContactImportService()
-    result = await service.import_contacts(uow=uow, file=file)
 
-    assert result.total == 3
-    assert result.imported == 2
-    assert result.skipped == 1
-    assert len(result.errors) == 1
-    assert result.errors[0]["row"] == 2
+    with pytest.raises(UnsupportedImportFileError):
+        await service.start_import(mock_uow, mock_file)
 
 
 @pytest.mark.asyncio
-@patch("app.services.contact_import.service.ContactMethodService")
-@patch("app.services.contact_import.service.ContactService")
-@patch("app.services.contact_import.service.ParserFactory")
-async def test_import_creates_contact_with_methods(mock_parser_cls, mock_contact_svc_cls, mock_method_svc_cls):
+async def test_get_import_status():
     from app.services.contact_import.service import ContactImportService
 
-    mock_parser = Mock()
-    mock_parser.parse = AsyncMock(return_value=[
-        {
-            "name": "Alice",
-            "external_id": "ext-1",
-            "email": "alice@test.com",
-            "telegram": "@alice",
-        },
-    ])
-    mock_parser_cls.get.return_value = mock_parser
+    job = SimpleNamespace(id=1)
 
-    mock_contact_svc = Mock()
-    mock_contact_svc.create_contact = AsyncMock(return_value=SimpleNamespace(id=42))
-    mock_contact_svc_cls.return_value = mock_contact_svc
-
-    mock_method_svc = Mock()
-    mock_method_svc.create_method = AsyncMock()
-    mock_method_svc_cls.return_value = mock_method_svc
-
-    uow = Mock()
-    file = Mock()
-    file.filename = "contacts.xlsx"
+    mock_uow = Mock()
+    mock_uow.import_job_repo = Mock()
+    mock_uow.import_job_repo.get = AsyncMock(return_value=job)
 
     service = ContactImportService()
-    await service.import_contacts(uow=uow, file=file)
+    result = await service.get_import_status(mock_uow, 1)
 
-    mock_contact_svc.create_contact.assert_awaited_once_with(
-        uow=uow,
-        external_id="ext-1",
-        name="Alice",
-        is_active=True,
-    )
+    assert result is job
+    mock_uow.import_job_repo.get.assert_awaited_once_with(1)
 
-    assert mock_method_svc.create_method.await_count == 2
 
-    mock_method_svc.create_method.assert_any_await(
-        uow=uow,
-        contact_id=42,
-        channel=ChannelType.EMAIL,
-        address="alice@test.com",
-    )
-    mock_method_svc.create_method.assert_any_await(
-        uow=uow,
-        contact_id=42,
-        channel=ChannelType.TELEGRAM,
-        address="@alice",
-    )
+@pytest.mark.asyncio
+async def test_get_import_status_not_found():
+    from app.services.contact_import.service import ContactImportService
+
+    mock_uow = Mock()
+    mock_uow.import_job_repo = Mock()
+    mock_uow.import_job_repo.get = AsyncMock(return_value=None)
+
+    service = ContactImportService()
+
+    with pytest.raises(ImportJobNotFoundError):
+        await service.get_import_status(mock_uow, 999)
+
+
+@pytest.mark.asyncio
+async def test_start_import_file_too_large():
+    from app.services.contact_import.service import ContactImportService
+
+    mock_uow = Mock()
+    mock_file = Mock()
+    mock_file.filename = "contacts.csv"
+    mock_file.read = AsyncMock(return_value=b"x" * 11)
+
+    with patch("app.services.contact_import.service.settings") as mock_settings:
+        mock_settings.MAX_FILE_SIZE_BYTES = 10
+
+        service = ContactImportService()
+
+        with pytest.raises(FileTooLargeError):
+            await service.start_import(mock_uow, mock_file)

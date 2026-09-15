@@ -89,4 +89,18 @@ class Settings(BaseSettings):
     LOG_LEVEL: LogLevel
     LOG_FORMAT: LogFormat
 
+    MINIO_ENDPOINT: str
+    MINIO_ACCESS_KEY: str
+    MINIO_SECRET_KEY: str
+    MINIO_BUCKET: str
+    MINIO_SECURE: bool
+
+    S3_RETRY_COUNT: int
+    S3_RETRY_DELAY_SECONDS: int
+
+    IMPORT_BATCH_SIZE: int
+    MAX_FILE_SIZE_BYTES: int
+
+    IMPORT_DIR: str
+
 settings = Settings()

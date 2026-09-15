@@ -1,4 +1,4 @@
-from app.exceptions.base import ValidationError
+from app.exceptions.base import NotFoundError, ValidationError
 
 
 class UnsupportedImportFileError(ValidationError):
@@ -24,3 +24,13 @@ class InvalidImportHeaderError(ValidationError):
 class AbsentNameFieldError(ValidationError):
     def __init__(self):
         super().__init__("Name is required")
+
+
+class ImportJobNotFoundError(NotFoundError):
+    def __init__(self, job_id: int):
+        super().__init__(f"Import job {job_id} not found")
+
+
+class FileTooLargeError(ValidationError):
+    def __init__(self):
+        super().__init__("File is too large")

@@ -25,6 +25,8 @@ services:
       start_period: 10s
 
     depends_on:
+      minio:
+        condition: service_healthy
       db:
         condition: service_healthy
       migrations:
@@ -93,6 +95,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  minio:
+    image: minio/minio:latest
+    container_name: notification_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   worker:
     build: .
     container_name: notification_worker
@@ -100,6 +119,8 @@ services:
     env_file:
       - .env
     depends_on:
+      minio:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -133,3 +154,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

@@ -25,6 +25,7 @@ pytest_plugins = [
     "tests.fixtures.repositories.delivery_repository",
     "tests.fixtures.repositories.template_repository",
     "tests.fixtures.repositories.notification_repository",
+    "tests.fixtures.repositories.import_job_repository",
 
     "tests.fixtures.services.contact_service",
     "tests.fixtures.services.contact_method_service",

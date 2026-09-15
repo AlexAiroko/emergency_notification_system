@@ -17,6 +17,7 @@ from app.models import (
     GroupContact,
     Notification,
     NotificationTemplate,
+    ImportJob,
 )
 
 

@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.tasks.notification",
         "app.tasks.delivery",
         "app.tasks.sweeper",
+        "app.tasks.contact_import",
     ],
 )
 

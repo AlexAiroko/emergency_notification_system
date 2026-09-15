@@ -13,6 +13,7 @@ from app.repositories import (
     NotificationRepository,
     NotificationTemplateRepository,
 )
+from app.repositories.import_job import ImportJobRepository
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class UnitOfWork:
     group_repo: GroupRepository
     contact_repo: ContactRepository
     contact_method_repo: ContactMethodRepository
+    import_job_repo: ImportJobRepository
     
     def __init__(self):
         self.session: AsyncSession | None = None

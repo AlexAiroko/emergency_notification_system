@@ -1,14 +1,18 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
+
+from app.models.import_job import ImportJobStatus
 
 
-class ImportErrorItem(BaseModel):
-    row: int
-    reason: str
+class ImportJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class ContactImportResponse(BaseModel):
-    message: str
+    id: int
+    filename: str
+    status: ImportJobStatus
     total: int
     imported: int
     skipped: int
-    errors: list[ImportErrorItem] = Field(default_factory=list)
+    errors: list[dict]
+    created_at: datetime

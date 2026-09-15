@@ -5,6 +5,7 @@ from .group_contact import GroupContact
 from .notification import Notification
 from .notification_template import NotificationTemplate
 from .delivery import Delivery
+from .import_job import ImportJob
 
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "Notification",
     "NotificationTemplate",
     "Delivery",
+    "ImportJob",
 ]

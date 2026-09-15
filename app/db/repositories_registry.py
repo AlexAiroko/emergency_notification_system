@@ -5,6 +5,7 @@ from app.repositories import (
     DeliveryRepository,
     GroupRepository,
     NotificationTemplateRepository,
+    ImportJobRepository,
 )
 
 
@@ -15,4 +16,5 @@ REPOSITORIES = {
     "template_repo": NotificationTemplateRepository,
     "contact_repo": ContactRepository,
     "contact_method_repo": ContactMethodRepository,
+    "import_job_repo": ImportJobRepository,
 }

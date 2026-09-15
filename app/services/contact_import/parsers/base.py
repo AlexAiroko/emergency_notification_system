@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-
-from fastapi import UploadFile
+from typing import AsyncGenerator
 
 from app.exceptions.contact_import import InvalidImportHeaderError
 
@@ -21,8 +20,9 @@ class BaseContactParser(ABC):
     @abstractmethod
     async def parse(
         self,
-        file: UploadFile,
-    ) -> list[dict]:
+        filename: str,
+        data: bytes,
+    ) -> AsyncGenerator[dict, None]:
         """
         Reads the file and returns contacts as dictionaries.
         """

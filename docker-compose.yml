@@ -96,7 +96,7 @@ services:
       timeout: 5s
       retries: 5
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-06-18T00-00-00Z
     container_name: notification_minio
     ports:
       - "9000:9000"

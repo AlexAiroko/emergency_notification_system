@@ -75,11 +75,6 @@ class Delivery(Base):
         DateTime(timezone=True),
         nullable=True
     )
-    
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
 
     attempts: Mapped[int] = mapped_column(
         Integer,
@@ -92,6 +87,11 @@ class Delivery(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    created_at: Mapped[DateTime] = mapped_column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+        )
     
     notification = relationship("Notification")
     contact = relationship("Contact")

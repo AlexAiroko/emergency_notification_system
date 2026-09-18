@@ -19,3 +19,5 @@ class DeliveryResponse(BaseModel):
     provider_message_id: str | None
     error_message: str | None
     sent_at: datetime | None
+    attempts: int
+    next_attempt_at: datetime | None

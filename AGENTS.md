@@ -11,7 +11,7 @@ FastAPI + async SQLAlchemy 2.0 + PostgreSQL, Pydantic v2, Alembic, Celery (Rabbi
 - Lint/format/typecheck (no config files — tool defaults): `poetry run ruff check .`, `poetry run black .`, `poetry run mypy app`
 - Migration: `poetry run alembic revision --autogenerate -m "..."` then `poetry run alembic upgrade head`
 - Audit dependencies: `poetry run pip-audit`
-- Dev DB only: `docker compose up -d db`; full stack (db, migrations, app, worker, rabbitmq, redis, prometheus, grafana): `docker compose up --build`
+- Dev DB only: `docker compose up -d db`; full stack (db, migrations, app, worker, beat, rabbitmq, redis, prometheus, grafana): `docker compose up --build`
 
 ## Setup gotchas
 - `.env` is gitignored but **required** — pydantic-settings validates every field at import (`app/core/config.py`). Copy `.env.example` and fill it in before running anything, including tests.
@@ -72,7 +72,7 @@ FastAPI + async SQLAlchemy 2.0 + PostgreSQL, Pydantic v2, Alembic, Celery (Rabbi
 - `POST /notifications` creates the Notification plus one PENDING `Delivery` per **active** contact method of each active contact (`NotificationService._prepare_deliveries`). `POST /notifications/{id}` enqueues the Celery task `send_notification_task.delay(notification_id)` — **not** BackgroundTasks. The task wraps the async UoW flow with `run_async()` (`app/core/async_utils.py`) — a per-process event loop helper, not `asyncio.run()`.
 - Sending is **batched**: notification work is split into chunks of ~100–200 deliveries, each chunk a separate task, so workers scale independently of the API (`app/tasks/delivery.py`). Finalization runs only after every chunk of the notification finished.
 - Delivery statuses: PENDING → SENT / FAILED. A failed attempt increments `attempts`; while `attempts < RETRY_COUNT` (default 5) the delivery returns to PENDING with `next_attempt_at = now + RETRY_INTERVAL` (default 1 min), otherwise it stays FAILED for manual handling (`app/services/delivery.py`, config in `app/core/config.py`). `SENT` deliveries are never re-sent; re-delivering a whole notification is allowed.
-- Guaranteed delivery: durable queue, `worker_ack_late=True`, `worker_prefetch_multiplier=1`. Beat task `sweep_deliveries` (every minute) re-drives due retries and resumes notifications stuck in `IN_PROGRESS` after a crash.
+- Guaranteed delivery: durable queue, `worker_ack_late=True`, `worker_prefetch_multiplier=1`. Beat task `sweep_deliveries` (every minute) re-drives due retries and resumes notifications stuck in `IN_PROGRESS` after a crash. All Celery tasks (`sweep_deliveries_task`, `send_batch_task`, `import_contacts_task`) have `autoretry_for=(Exception,)` with exponential backoff (max 3 retries) to prevent infinite redelivery from `task_acks_on_failure_or_timeout=False`.
 - A notification finalizes to SUCCESS / FAILED / PARTIAL_SUCCESS in `NotificationService.finalize_notification` only when all its deliveries are terminal (no PENDING left).
 
 ## Conventions

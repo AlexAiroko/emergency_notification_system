@@ -120,6 +120,7 @@ async def _process_import(job_id: int):
 
         except Exception as exc:
             logger.exception("Import %s failed", job_id)
+            await uow.rollback()
             await uow.import_job_repo.mark_failed(
                 job_id, [{"row": 0, "reason": str(exc)}],
             )

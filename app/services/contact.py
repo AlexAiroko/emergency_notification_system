@@ -35,7 +35,11 @@ class ContactService:
                 "Contact with external_id=%s already exists",
                 external_id,
             )
-            raise ContactAlreadyExistsError() from exc
+            await uow.rollback()
+            await uow.session.begin()
+            contact = await uow.contact_repo.get_by_external_id(external_id)
+            if contact is None:
+                raise ContactAlreadyExistsError() from exc
 
         logger.info(
             "Created contact %s (name=%s)",

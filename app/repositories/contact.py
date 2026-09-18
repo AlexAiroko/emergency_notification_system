@@ -16,3 +16,8 @@ class ContactRepository(ActiveRepository):
         )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
+
+    async def get_by_external_id(self, external_id: str) -> Contact | None:
+        stmt = select(self.model).where(self.model.external_id == external_id)
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()

@@ -37,6 +37,10 @@ async def _sweep_deliveries():
         await service.delivery_service.provider_registry.close_all()
 
 
-@celery_app.task
+@celery_app.task(
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
 def sweep_deliveries_task():
     run_async(_sweep_deliveries())

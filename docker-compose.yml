@@ -127,6 +127,19 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+  beat:
+    build: .
+    container_name: notification_beat
+    command: celery -A app.celery_app.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
   prometheus:
     image: prom/prometheus:latest
     container_name: notification_prometheus

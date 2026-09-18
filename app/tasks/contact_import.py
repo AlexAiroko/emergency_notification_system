@@ -133,6 +133,10 @@ async def _process_import(job_id: int):
                 logger.warning("Failed to cleanup S3: %s", object_name)
 
 
-@celery_app.task
+@celery_app.task(
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3,
+)
 def import_contacts_task(job_id: int):
     run_async(_process_import(job_id))

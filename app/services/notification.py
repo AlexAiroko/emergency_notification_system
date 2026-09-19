@@ -6,7 +6,7 @@ from app.core.rate_limiter import RateLimiter
 from app.core.utils import utc_now, chunk
 from app.db.uow import UnitOfWork
 from app.exceptions.delivery import TooManyDeliveriesError
-from app.exceptions.notification import NotificationNotFoundError
+from app.exceptions.notification import NotificationAlreadySentError, NotificationNotFoundError
 from app.exceptions.notification_template import TemplateRenderError
 from app.metrics.registry import get_metrics_collector
 from app.models.contact import Contact
@@ -135,8 +135,11 @@ class NotificationService:
             )
             raise NotificationNotFoundError(notification_id)
 
-        await uow.notification_repo.mark_started(notification_id)
-        logger.info("Notification %s started", notification_id)
+        if notification.status == NotificationStatus.PENDING:
+            await uow.notification_repo.mark_started(notification_id)
+            logger.info("Notification %s started", notification_id)
+        elif notification.status != NotificationStatus.IN_PROGRESS:
+            raise NotificationAlreadySentError(notification_id)
 
         collector = get_metrics_collector()
         collector.notifications_in_progress.inc()

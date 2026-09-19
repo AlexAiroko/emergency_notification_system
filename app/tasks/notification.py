@@ -21,11 +21,6 @@ async def _dispatch_notification(notification_id: int):
 
     try:
         async with UnitOfWork() as uow:
-            await service.start_notification(
-                uow=uow,
-                notification_id=notification_id,
-            )
-
             batches = await service.prepare_batches(uow, notification_id)
         if not batches:
             logger.info(

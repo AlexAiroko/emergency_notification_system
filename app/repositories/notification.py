@@ -1,4 +1,4 @@
-from sqlalchemy import exists, select
+from sqlalchemy import exists, select, update
 from sqlalchemy.orm import selectinload
 
 from app.models.delivery import Delivery, DeliveryStatus
@@ -49,3 +49,16 @@ class NotificationRepository(BaseRepository):
         )
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
+
+    async def claim_for_sending(self, notification_id: int) -> bool:
+        stmt = (
+            update(Notification)
+            .where(
+                Notification.id == notification_id,
+                Notification.status == NotificationStatus.PENDING,
+            )
+            .values(status=NotificationStatus.IN_PROGRESS)
+        )
+        result = await self.session.execute(stmt)
+        await self.flush()
+        return result.rowcount > 0

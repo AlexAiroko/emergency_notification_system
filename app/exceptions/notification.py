@@ -1,4 +1,4 @@
-from app.exceptions.base import NotFoundError
+from app.exceptions.base import ConflictError, NotFoundError
 
 
 class NotificationNotFoundError(NotFoundError):
@@ -6,3 +6,10 @@ class NotificationNotFoundError(NotFoundError):
     
     def __init__(self, notification_id: int) -> None:
         super().__init__(f"Notification {notification_id} not found")
+
+
+class NotificationAlreadySentError(ConflictError):
+    code = "notification_already_sent"
+
+    def __init__(self, notification_id: int) -> None:
+        super().__init__(f"Notification {notification_id} already sent")

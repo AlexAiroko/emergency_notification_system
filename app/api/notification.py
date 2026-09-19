@@ -66,10 +66,12 @@ async def get_notification(
 @router.post(
     "/{notification_id}",
 )
-def send_notification(
+async def send_notification(
     notification_id: int,
+    uow: UnitOfWork = Depends(get_uow),
+    service: NotificationService = Depends(get_notification_service)
 ):
-    logger.info("Enqueuing notification %s", notification_id)
+    await service.start_notification(uow, notification_id)
     send_notification_task.delay(notification_id)
     return {"message": "Notification started"}
 

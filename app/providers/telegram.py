@@ -28,7 +28,6 @@ class TelegramProvider(BaseProvider):
         payload = {
             "chat_id": to,
             "text": self._format_message(subject, body),
-            "parse_mode": "HTML",
         }
 
         try:

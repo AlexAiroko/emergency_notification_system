@@ -31,12 +31,18 @@ services:
         condition: service_healthy
       migrations:
         condition: service_completed_successfully
+      prometheus-init:
+        condition: service_completed_successfully
 
     env_file:
       - .env
 
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+
     volumes:
       - .:/app
+      - prometheus_multiproc:/tmp/prometheus-multiproc
 
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
@@ -76,9 +82,11 @@ services:
     env_file:
       - .env
   rabbitmq:
-    image: rabbitmq:3-management
+    build:
+      context: ./docker/rabbitmq
     container_name: notification_rabbitmq
     ports:
+      - "5672:5672"
       - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -118,6 +126,10 @@ services:
     command: celery -A app.celery_app.celery_app worker --loglevel=info
     env_file:
       - .env
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus-multiproc
     depends_on:
       minio:
         condition: service_healthy
@@ -127,6 +139,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      prometheus-init:
+        condition: service_completed_successfully
   beat:
     build: .
     container_name: notification_beat
@@ -140,6 +154,13 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+  prometheus-init:
+    image: busybox:1.36
+    container_name: notification_prometheus_init
+    command: sh -c "rm -rf /prometheus-multiproc/*"
+    volumes:
+      - prometheus_multiproc:/prometheus-multiproc
+
   prometheus:
     image: prom/prometheus:latest
     container_name: notification_prometheus
@@ -168,3 +189,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  prometheus_multiproc:

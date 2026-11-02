@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from app.core.utils import utc_now
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
 from app.exceptions.notification_template import TemplateRenderError
@@ -20,6 +21,7 @@ async def test_send_success(delivery_service, uow):
         address="user@mail.com",
         contact_id=100,
         attempts=0,
+        created_at=utc_now(),
     )
 
     contact = SimpleNamespace(id=100, name="Test User")
@@ -334,6 +336,7 @@ async def test_send_delivery_rate_limiter_called_with_correct_key(delivery_servi
         address="123456789",
         contact_id=100,
         attempts=0,
+        created_at=utc_now(),
     )
 
     contact = SimpleNamespace(id=100, name="Test User")

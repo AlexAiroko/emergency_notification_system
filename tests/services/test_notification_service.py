@@ -144,7 +144,9 @@ async def test_create_notification_with_contact_without_methods(notification_ser
 
 @pytest.mark.asyncio
 async def test_start_notification(notification_service, uow):
-    uow.notification_repo.get = AsyncMock(return_value=SimpleNamespace(id=42))
+    uow.notification_repo.get = AsyncMock(
+        return_value=SimpleNamespace(id=42, status=NotificationStatus.PENDING),
+    )
     uow.notification_repo.mark_started = AsyncMock()
 
     await notification_service.start_notification(uow, 42)
@@ -203,57 +205,59 @@ async def test_finalize_notification(
     expected_status,
 ):
     uow.delivery_repo.get_stats = AsyncMock(return_value=stats)
-    uow.notification_repo.update_status = AsyncMock()
+    uow.notification_repo.finalize_if_in_progress = AsyncMock(return_value=True)
 
-    await notification_service.finalize_notification(
-        uow,
-        1,
-    )
+    await notification_service.finalize_notification(uow, 1)
 
     uow.delivery_repo.get_stats.assert_awaited_once_with(1)
-
-    uow.notification_repo.update_status.assert_awaited_once_with(
-        1,
-        expected_status,
+    uow.notification_repo.finalize_if_in_progress.assert_awaited_once_with(
+        1, expected_status,
     )
 
 
 @pytest.mark.asyncio
 async def test_finalize_notification_no_deliveries_marks_success(notification_service, uow):
     uow.delivery_repo.get_stats = AsyncMock(return_value={})
-    uow.notification_repo.update_status = AsyncMock()
+    uow.notification_repo.finalize_if_in_progress = AsyncMock(return_value=True)
 
-    await notification_service.finalize_notification(
-        uow,
-        1,
-    )
+    await notification_service.finalize_notification(uow, 1)
 
     uow.delivery_repo.get_stats.assert_awaited_once_with(1)
-
-    uow.notification_repo.update_status.assert_awaited_once_with(
-        1,
-        NotificationStatus.SUCCESS,
+    uow.notification_repo.finalize_if_in_progress.assert_awaited_once_with(
+        1, NotificationStatus.SUCCESS,
     )
 
 
 @pytest.mark.asyncio
 async def test_finalize_notification_skips_when_pending_deliveries(notification_service, uow):
     uow.delivery_repo.get_stats = AsyncMock(return_value={"sent": 1, "pending": 2})
-    uow.notification_repo.update_status = AsyncMock()
+    uow.notification_repo.finalize_if_in_progress = AsyncMock()
 
     await notification_service.finalize_notification(uow, 1)
 
-    uow.notification_repo.update_status.assert_not_called()
+    uow.notification_repo.finalize_if_in_progress.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_finalize_notification_skips_when_only_pending(notification_service, uow):
     uow.delivery_repo.get_stats = AsyncMock(return_value={"pending": 3})
-    uow.notification_repo.update_status = AsyncMock()
+    uow.notification_repo.finalize_if_in_progress = AsyncMock()
 
     await notification_service.finalize_notification(uow, 1)
 
-    uow.notification_repo.update_status.assert_not_called()
+    uow.notification_repo.finalize_if_in_progress.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_finalize_notification_idempotent(notification_service, uow):
+    uow.delivery_repo.get_stats = AsyncMock(return_value={"sent": 1})
+    uow.notification_repo.finalize_if_in_progress = AsyncMock(return_value=False)
+
+    await notification_service.finalize_notification(uow, 1)
+
+    uow.notification_repo.finalize_if_in_progress.assert_awaited_once_with(
+        1, NotificationStatus.SUCCESS,
+    )
 
 
 @pytest.mark.asyncio
@@ -324,7 +328,7 @@ async def test_finalize_stuck_notifications_finalizes_each(notification_service,
         return_value=[1, 2],
     )
     uow.delivery_repo.get_stats = AsyncMock(return_value={"sent": 1})
-    uow.notification_repo.update_status = AsyncMock()
+    uow.notification_repo.finalize_if_in_progress = AsyncMock(return_value=True)
 
     count = await notification_service.finalize_stuck_notifications(uow)
 
@@ -333,7 +337,7 @@ async def test_finalize_stuck_notifications_finalizes_each(notification_service,
     uow.notification_repo.get_stuck_in_progress_ids.assert_awaited_once()
     uow.delivery_repo.get_stats.assert_awaited_with(2)
     assert uow.delivery_repo.get_stats.await_count == 2
-    assert uow.notification_repo.update_status.await_count == 2
+    assert uow.notification_repo.finalize_if_in_progress.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -345,7 +349,7 @@ async def test_finalize_stuck_notifications_empty(notification_service, uow):
     assert count == 0
 
     uow.delivery_repo.get_stats.assert_not_called()
-    uow.notification_repo.update_status.assert_not_called()
+    uow.notification_repo.finalize_if_in_progress.assert_not_called()
 
 
 @pytest.mark.asyncio

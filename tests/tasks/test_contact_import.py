@@ -205,6 +205,7 @@ async def test_process_import_s3_retries_on_connection_error(
     mock_settings.IMPORT_BATCH_SIZE = 100
     mock_settings.IMPORT_DIR = "imports"
     mock_settings.S3_RETRY_COUNT = 3
+    mock_settings.S3_RETRY_DELAY_SECONDS = 0
 
     fake_uow = make_patched_fake_uow()
     mock_uow_cls.return_value = fake_uow

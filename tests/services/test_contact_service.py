@@ -37,6 +37,7 @@ async def test_create_contact_already_exists(contact_service, uow):
             orig=Exception(),
         )
     )
+    uow.contact_repo.get_by_external_id = AsyncMock(return_value=None)
 
     with pytest.raises(ContactAlreadyExistsError):
         await contact_service.create_contact(
@@ -44,6 +45,30 @@ async def test_create_contact_already_exists(contact_service, uow):
             name="John",
             external_id="ext-1",
         )
+
+
+@pytest.mark.asyncio
+async def test_create_contact_already_exists_returns_existing(contact_service, uow):
+    existing = SimpleNamespace(id=7, name="Existing")
+
+    uow.contact_repo.create = AsyncMock(
+        side_effect=IntegrityError(
+            statement="",
+            params={},
+            orig=Exception(),
+        )
+    )
+    uow.contact_repo.get_by_external_id = AsyncMock(return_value=existing)
+
+    result = await contact_service.create_contact(
+        uow=uow,
+        name="John",
+        external_id="ext-1",
+    )
+
+    assert result is existing
+    uow.contact_repo.get_by_external_id.assert_awaited_once_with("ext-1")
+    uow.rollback.assert_awaited_once()
 
 
 @pytest.mark.asyncio

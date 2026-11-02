@@ -8,7 +8,7 @@ from app.db.uow import UnitOfWork
 from app.exceptions.delivery import TooManyDeliveriesError
 from app.exceptions.notification import NotificationAlreadySentError, NotificationNotFoundError
 from app.exceptions.notification_template import TemplateRenderError
-from app.metrics.registry import get_metrics_collector
+from app.metrics.collector import notifications_total
 from app.models.contact import Contact
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.notification import Notification, NotificationStatus
@@ -127,12 +127,9 @@ class NotificationService:
         notification_id: int,
     ) -> None:
         notification = await uow.notification_repo.get(notification_id)
-        
+
         if notification is None:
-            logger.warning(
-                "Notification %s not found",
-                notification_id,
-            )
+            logger.warning("Notification %s not found", notification_id)
             raise NotificationNotFoundError(notification_id)
 
         if notification.status == NotificationStatus.PENDING:
@@ -140,9 +137,6 @@ class NotificationService:
             logger.info("Notification %s started", notification_id)
         elif notification.status != NotificationStatus.IN_PROGRESS:
             raise NotificationAlreadySentError(notification_id)
-
-        collector = get_metrics_collector()
-        collector.notifications_in_progress.inc()
 
     async def prepare_batches(
         self,
@@ -198,14 +192,19 @@ class NotificationService:
         else:
             status = NotificationStatus.PARTIAL_SUCCESS
 
-        await uow.notification_repo.update_status(
+        transitioned = await uow.notification_repo.finalize_if_in_progress(
             notification_id,
             status,
         )
 
-        collector = get_metrics_collector()
-        collector.notifications_total.inc(status=status.value)
-        collector.notifications_in_progress.inc(-1)
+        if not transitioned:
+            logger.info(
+                "Notification %s already finalized, skipping",
+                notification_id,
+            )
+            return
+
+        notifications_total.labels(status=status.value).inc()
 
         logger.info(
             "Finalized notification %s (status=%s, sent=%s, failed=%s)",

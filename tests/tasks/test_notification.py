@@ -22,7 +22,6 @@ async def test_dispatch_notification_enqueues_batches(
     mock_uow_cls.return_value = fake_uow
 
     service = Mock()
-    service.start_notification = AsyncMock()
     service.prepare_batches = AsyncMock(return_value=[[1, 2], [3]])
     service.delivery_service = Mock()
     service.delivery_service.provider_registry = make_mock_provider_registry()
@@ -32,9 +31,6 @@ async def test_dispatch_notification_enqueues_batches(
 
     await _dispatch_notification(42)
 
-    service.start_notification.assert_awaited_once_with(
-        uow=fake_uow, notification_id=42,
-    )
     service.prepare_batches.assert_awaited_once_with(fake_uow, 42)
 
     assert mock_send_batch_task.delay.call_count == 2
@@ -59,7 +55,6 @@ async def test_dispatch_notification_no_batches_finalizes(
     mock_uow_cls.return_value = fake_uow
 
     service = Mock()
-    service.start_notification = AsyncMock()
     service.prepare_batches = AsyncMock(return_value=[])
     service.finalize_notification = AsyncMock()
     service.delivery_service = Mock()
@@ -79,7 +74,7 @@ async def test_dispatch_notification_no_batches_finalizes(
 @patch("app.tasks.notification.UnitOfWork")
 @patch("app.tasks.notification.NotificationService")
 @patch("app.tasks.notification.get_rate_limiter")
-async def test_dispatch_notification_start_error_still_closes(
+async def test_dispatch_notification_error_still_closes(
     mock_get_limiter,
     mock_service_cls,
     mock_uow_cls,
@@ -91,7 +86,7 @@ async def test_dispatch_notification_start_error_still_closes(
     mock_uow_cls.return_value = fake_uow
 
     service = Mock()
-    service.start_notification = AsyncMock(
+    service.prepare_batches = AsyncMock(
         side_effect=NotificationNotFoundError(42),
     )
     service.delivery_service = Mock()

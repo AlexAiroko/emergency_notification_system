@@ -84,8 +84,6 @@ class Settings(BaseSettings):
     RATE_LIMIT_EMAIL: int
     RATE_LIMIT_TELEGRAM: int
 
-    METRICS_ENABLED: bool
-
     LOG_LEVEL: LogLevel
     LOG_FORMAT: LogFormat
 

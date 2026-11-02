@@ -1,4 +1,4 @@
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.orm import selectinload
 
 from app.models.delivery import Delivery, DeliveryStatus
@@ -62,3 +62,35 @@ class NotificationRepository(BaseRepository):
         result = await self.session.execute(stmt)
         await self.flush()
         return result.rowcount > 0
+
+    async def finalize_if_in_progress(
+        self,
+        notification_id: int,
+        status: NotificationStatus,
+    ) -> bool:
+        """
+        Atomically transitions a notification out of IN_PROGRESS.
+
+        Returns True only if this call performed the transition, so callers
+        can guard metrics/notifications against double-finalization.
+        """
+        stmt = (
+            update(Notification)
+            .where(
+                Notification.id == notification_id,
+                Notification.status == NotificationStatus.IN_PROGRESS,
+            )
+            .values(status=status)
+        )
+        result = await self.session.execute(stmt)
+        await self.flush()
+        return result.rowcount > 0
+
+    async def count_in_progress(self) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.status == NotificationStatus.IN_PROGRESS)
+        )
+        res = await self.session.execute(stmt)
+        return int(res.scalar_one())

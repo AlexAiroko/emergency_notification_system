@@ -1,9 +1,13 @@
+import os
 from datetime import timedelta
 
 from celery import Celery
+from celery.signals import worker_process_shutdown
 from kombu import Queue
+from prometheus_client import multiprocess
 
 from app.core.config import settings
+from app.metrics.registry import multiprocess_dir
 
 
 celery_app = Celery(
@@ -46,3 +50,9 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@worker_process_shutdown.connect
+def _drop_prometheus_process_metrics(**_kwargs) -> None:
+    if multiprocess_dir():
+        multiprocess.mark_process_dead(os.getpid())

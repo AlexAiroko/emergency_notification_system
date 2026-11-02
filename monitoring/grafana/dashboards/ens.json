@@ -11,10 +11,12 @@
       "id": 1,
       "title": "Notifications by Status",
       "type": "piechart",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "ens_notifications_total",
           "legendFormat": "{{status}}"
         }
@@ -24,12 +26,16 @@
       "id": 2,
       "title": "Deliveries by Channel & Status",
       "type": "table",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "ens_deliveries_total",
-          "legendFormat": "{{channel}} {{status}}"
+          "legendFormat": "{{channel}} {{status}}",
+          "format": "table",
+          "instant": true
         }
       ],
       "options": {
@@ -40,10 +46,12 @@
       "id": 3,
       "title": "Delivery Retries",
       "type": "barchart",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "targets": [
         {
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "ens_delivery_retries_total",
           "legendFormat": "{{channel}}"
         }
@@ -53,10 +61,12 @@
       "id": 4,
       "title": "Rate Limit Rejects",
       "type": "barchart",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "targets": [
         {
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "ens_rate_limit_rejects_total",
           "legendFormat": "{{channel}}"
         }
@@ -66,10 +76,12 @@
       "id": 5,
       "title": "Notifications In Progress",
       "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "targets": [
         {
           "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "ens_notifications_in_progress"
         }
       ],
@@ -85,6 +97,26 @@
               { "color": "red", "value": 40 }
             ]
           }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Avg Delivery Time",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(ens_delivery_duration_seconds_sum[5m]) / rate(ens_delivery_duration_seconds_count[5m])",
+          "legendFormat": "{{channel}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
         }
       }
     }

@@ -1,6 +1,10 @@
-from contextlib import asynccontextmanager
+import asyncio
+import logging
+import os
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+from prometheus_client import multiprocess
 
 import app.core.logging
 from app.api.exception import error_handler
@@ -12,13 +16,40 @@ from app.api.delivery import router as delivery_router
 from app.api.notification import router as notification_router
 from app.api.metrics import router as metrics_router
 from app.core.rate_limiter import get_rate_limiter
+from app.db.uow import UnitOfWork
 from app.exceptions.base import AppError
+from app.metrics.collector import notifications_in_progress
+from app.metrics.registry import multiprocess_dir
+
+
+logger = logging.getLogger(__name__)
+
+IN_PROGRESS_REFRESH_SECONDS = 10
+
+
+async def _refresh_in_progress_loop() -> None:
+    while True:
+        try:
+            async with UnitOfWork() as uow:
+                count = await uow.notification_repo.count_in_progress()
+            notifications_in_progress.set(count)
+        except Exception:
+            logger.exception("Failed to refresh notifications_in_progress")
+        await asyncio.sleep(IN_PROGRESS_REFRESH_SECONDS)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await get_rate_limiter().close()
+    refresh_task = asyncio.create_task(_refresh_in_progress_loop())
+    try:
+        yield
+    finally:
+        refresh_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await refresh_task
+        await get_rate_limiter().close()
+        if multiprocess_dir():
+            multiprocess.mark_process_dead(os.getpid())
 
 
 app = FastAPI(lifespan=lifespan)

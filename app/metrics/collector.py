@@ -1,80 +1,39 @@
-class Counter:
-    def __init__(self, name: str, help_text: str, label_names: tuple[str, ...]):
-        self.name = name
-        self.help_text = help_text
-        self.label_names = label_names
-        self._values: dict[tuple[str, ...], int] = {}
-
-    def inc(self, **labels) -> None:
-        key = tuple(labels[name] for name in self.label_names)
-        self._values[key] = self._values.get(key, 0) + 1
-
-    def render(self) -> list[str]:
-        lines = [
-            f"# HELP {self.name} {self.help_text}",
-            f"# TYPE {self.name} counter",
-        ]
-        for key, count in sorted(self._values.items()):
-            labels = ",".join(f'{n}="{v}"' for n, v in zip(self.label_names, key))
-            lines.append(f"{self.name}{{{labels}}} {count}")
-        return lines
+from prometheus_client import Counter, Gauge, Histogram
 
 
-class Gauge:
-    def __init__(self, name: str, help_text: str):
-        self.name = name
-        self.help_text = help_text
-        self._value: int = 0
+notifications_total = Counter(
+    "ens_notifications_total",
+    "Total notifications finalized, by status",
+    ("status",),
+)
 
-    def set(self, value: int) -> None:
-        self._value = value
+deliveries_total = Counter(
+    "ens_deliveries_total",
+    "Total delivery attempts, by channel and status",
+    ("channel", "status"),
+)
 
-    def inc(self, delta: int = 1) -> None:
-        self._value += delta
+delivery_retries_total = Counter(
+    "ens_delivery_retries_total",
+    "Total delivery retries scheduled, by channel",
+    ("channel",),
+)
 
-    def render(self) -> list[str]:
-        return [
-            f"# HELP {self.name} {self.help_text}",
-            f"# TYPE {self.name} gauge",
-            f"{self.name} {self._value}",
-        ]
+rate_limit_rejects_total = Counter(
+    "ens_rate_limit_rejects_total",
+    "Total rate limit rejections, by channel",
+    ("channel",),
+)
 
+notifications_in_progress = Gauge(
+    "ens_notifications_in_progress",
+    "Notifications currently being processed",
+    multiprocess_mode="max",
+)
 
-class MetricsCollector:
-    def __init__(self):
-        self.notifications_total = Counter(
-            "ens_notifications_total",
-            "Total notifications processed",
-            ("status",),
-        )
-        self.deliveries_total = Counter(
-            "ens_deliveries_total",
-            "Total deliveries processed",
-            ("channel", "status"),
-        )
-        self.delivery_retries_total = Counter(
-            "ens_delivery_retries_total",
-            "Total delivery retries",
-            ("channel",),
-        )
-        self.rate_limit_rejects_total = Counter(
-            "ens_rate_limit_rejects_total",
-            "Rate limit rejections",
-            ("channel",),
-        )
-        self.notifications_in_progress = Gauge(
-            "ens_notifications_in_progress",
-            "Notifications currently being processed",
-        )
-
-    def render(self) -> str:
-        lines = []
-        for metric in (
-            self.notifications_total,
-            self.deliveries_total,
-            self.delivery_retries_total,
-            self.rate_limit_rejects_total,
-            self.notifications_in_progress,
-        ):
-            lines.extend(metric.render())
-        return "\n".join(lines) + "\n"
+delivery_duration_seconds = Histogram(
+    "ens_delivery_duration_seconds",
+    "End-to-end delivery duration in seconds, by channel",
+    ("channel",),
+    buckets=(0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600, 1800),
+)

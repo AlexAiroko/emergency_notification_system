@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import cast
 import logging
 
 from app.core.config import settings
@@ -8,7 +9,12 @@ from app.db.uow import UnitOfWork
 from app.exceptions.delivery import DeliveryNotFoundError
 from app.exceptions.notification import NotificationNotFoundError
 from app.exceptions.notification_template import TemplateRenderError
-from app.metrics.registry import get_metrics_collector
+from app.metrics.collector import (
+    deliveries_total,
+    delivery_duration_seconds,
+    delivery_retries_total,
+    rate_limit_rejects_total,
+)
 from app.models.contact_method import ChannelType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.providers.base import ProviderError
@@ -104,9 +110,10 @@ class DeliveryService:
                 )
                 logger.info("Delivery %s rate limited, retry in 1s", delivery.id)
 
-                collector = get_metrics_collector()
-                collector.rate_limit_rejects_total.inc(channel=delivery.channel.value)
-                collector.deliveries_total.inc(channel=delivery.channel.value, status="rate_limited")
+                rate_limit_rejects_total.labels(channel=delivery.channel.value).inc()
+                deliveries_total.labels(
+                    channel=delivery.channel.value, status="rate_limited",
+                ).inc()
                 return
 
             contact = await uow.contact_repo.get(delivery.contact_id)
@@ -134,8 +141,10 @@ class DeliveryService:
                 delivery.id,
             )
 
-            collector = get_metrics_collector()
-            collector.deliveries_total.inc(channel=delivery.channel.value, status="sent")
+            deliveries_total.labels(channel=delivery.channel.value, status="sent").inc()
+            delivery_duration_seconds.labels(channel=delivery.channel.value).observe(
+                (utc_now() - cast(datetime, delivery.created_at)).total_seconds(),
+            )
 
         except ProviderError as exc:
             if delivery.attempts < settings.RETRY_COUNT:
@@ -148,8 +157,7 @@ class DeliveryService:
                     delivery.id, delivery.attempts + 1, settings.RETRY_COUNT
                 )
 
-                collector = get_metrics_collector()
-                collector.delivery_retries_total.inc(channel=delivery.channel.value)
+                delivery_retries_total.labels(channel=delivery.channel.value).inc()
             else:
                 await uow.delivery_repo.mark_failed(
                     delivery.id,
@@ -160,8 +168,7 @@ class DeliveryService:
                     delivery.id,
                 )
 
-                collector = get_metrics_collector()
-                collector.deliveries_total.inc(channel=delivery.channel.value, status="failed")
+                deliveries_total.labels(channel=delivery.channel.value, status="failed").inc()
         except TemplateRenderError as exc:
             await uow.delivery_repo.mark_failed(
                 delivery.id,
@@ -169,8 +176,7 @@ class DeliveryService:
             )
             logger.error("Template render failed for delivery %s: %s", delivery.id, exc)
 
-            collector = get_metrics_collector()
-            collector.deliveries_total.inc(channel=delivery.channel.value, status="failed")
+            deliveries_total.labels(channel=delivery.channel.value, status="failed").inc()
 
     async def send_pending(
         self,

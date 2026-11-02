@@ -249,3 +249,83 @@ async def test_get_stuck_in_progress_ids_excludes_other_statuses(
     stuck = await notification_repo.get_stuck_in_progress_ids()
 
     assert stuck == []
+
+
+@pytest.mark.asyncio
+async def test_finalize_if_in_progress_transitions(
+    notification_template, group, notification_repo,
+):
+    notification = await notification_repo.create(
+        template_id=notification_template.id, group_id=group.id,
+    )
+    await notification_repo.mark_started(notification.id)
+
+    transitioned = await notification_repo.finalize_if_in_progress(
+        notification.id, NotificationStatus.SUCCESS,
+    )
+
+    assert transitioned is True
+    updated = await notification_repo.get(notification.id)
+    assert updated.status == NotificationStatus.SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_finalize_if_in_progress_is_idempotent(
+    notification_template, group, notification_repo,
+):
+    notification = await notification_repo.create(
+        template_id=notification_template.id, group_id=group.id,
+    )
+    await notification_repo.mark_started(notification.id)
+
+    first = await notification_repo.finalize_if_in_progress(
+        notification.id, NotificationStatus.SUCCESS,
+    )
+    second = await notification_repo.finalize_if_in_progress(
+        notification.id, NotificationStatus.FAILED,
+    )
+
+    assert first is True
+    assert second is False
+    updated = await notification_repo.get(notification.id)
+    assert updated.status == NotificationStatus.SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_finalize_if_in_progress_requires_in_progress(
+    notification_template, group, notification_repo,
+):
+    notification = await notification_repo.create(
+        template_id=notification_template.id, group_id=group.id,
+    )
+
+    transitioned = await notification_repo.finalize_if_in_progress(
+        notification.id, NotificationStatus.SUCCESS,
+    )
+
+    assert transitioned is False
+    updated = await notification_repo.get(notification.id)
+    assert updated.status == NotificationStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_count_in_progress(
+    notification_template, group, notification_repo,
+):
+    a = await notification_repo.create(
+        template_id=notification_template.id, group_id=group.id,
+    )
+    b = await notification_repo.create(
+        template_id=notification_template.id, group_id=group.id,
+    )
+    await notification_repo.mark_started(a.id)
+
+    assert await notification_repo.count_in_progress() == 1
+
+    await notification_repo.mark_started(b.id)
+    assert await notification_repo.count_in_progress() == 2
+
+    await notification_repo.finalize_if_in_progress(
+        a.id, NotificationStatus.SUCCESS,
+    )
+    assert await notification_repo.count_in_progress() == 1

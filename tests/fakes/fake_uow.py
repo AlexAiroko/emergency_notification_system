@@ -27,6 +27,9 @@ class FakeUnitOfWork:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
 
+        self.session = Mock()
+        self.session.begin = AsyncMock()
+
     async def __aenter__(self):
         return self
 

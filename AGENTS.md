@@ -40,16 +40,17 @@ FastAPI + async SQLAlchemy 2.0 + PostgreSQL, Pydantic v2, Alembic, Celery (Rabbi
 - Config: `RATE_LIMIT_EMAIL` (requests/min), `RATE_LIMIT_TELEGRAM` (requests/min) in `app/core/config.py`.
 
 ## Metrics & Monitoring
-- `GET /metrics` — Prometheus text format. 5 business metrics:
+- `GET /metrics` — Prometheus text format via `prometheus_client`. 6 business metrics (`app/metrics/collector.py`):
   - `ens_notifications_total` (counter, label: status)
   - `ens_deliveries_total` (counter, labels: channel, status)
   - `ens_delivery_retries_total` (counter, label: channel)
   - `ens_rate_limit_rejects_total` (counter, label: channel)
-  - `ens_notifications_in_progress` (gauge)
-- `MetricsCollector` singleton in `app/metrics/registry.py`. Services call `get_metrics_collector()` to increment counters/gauges.
-- Config: `METRICS_ENABLED: bool` in `app/core/config.py`.
+  - `ens_notifications_in_progress` (gauge, `multiprocess_mode="max"`) — value is read from the DB (`NotificationRepository.count_in_progress`) by a background refresher in `app/main.py` (every `IN_PROGRESS_REFRESH_SECONDS`); it is **not** incremented/decremented in services
+  - `ens_delivery_duration_seconds` (histogram, label: channel) — end-to-end (`utc_now() - delivery.created_at`)
+- Metrics are module-level objects; services import and increment them directly (`.labels(...).inc()` / `.observe()`). No collector singleton.
+- **Multiprocess mode**: when `PROMETHEUS_MULTIPROC_DIR` is set (Docker: `app` + `worker` share a volume), all processes write to one dir and `/metrics` aggregates via `MultiProcessCollector` (`app/metrics/registry.py`). Without the env var (local dev/tests) the in-process default `REGISTRY` is used. Dead processes are cleaned up with `multiprocess.mark_process_dead` on Celery `worker_process_shutdown` (`app/celery_app.py`) and API shutdown (`app/main.py`). Docker runs a one-shot `prometheus-init` service that clears the shared dir before `app`/`worker` start.
 - Prometheus scrapes `app:8000/metrics` every 15s (`monitoring/prometheus/prometheus.yml`).
-- Grafana auto-provisioned at `http://localhost:3000` (admin/admin) with ENS dashboard (`monitoring/grafana/dashboards/ens.json`). Datasource + dashboard provisioned via YAML.
+- Grafana auto-provisioned at `http://localhost:3000` (admin/admin) with ENS dashboard (`monitoring/grafana/dashboards/ens.json`). Datasource (`uid: prometheus`) + dashboard provisioned via YAML.
 - Start monitoring: `docker compose up -d prometheus grafana`
 
 ## Logging
@@ -73,7 +74,7 @@ FastAPI + async SQLAlchemy 2.0 + PostgreSQL, Pydantic v2, Alembic, Celery (Rabbi
 - Sending is **batched**: notification work is split into chunks of ~100–200 deliveries, each chunk a separate task, so workers scale independently of the API (`app/tasks/delivery.py`). Finalization runs only after every chunk of the notification finished.
 - Delivery statuses: PENDING → SENT / FAILED. A failed attempt increments `attempts`; while `attempts < RETRY_COUNT` (default 5) the delivery returns to PENDING with `next_attempt_at = now + RETRY_INTERVAL` (default 1 min), otherwise it stays FAILED for manual handling (`app/services/delivery.py`, config in `app/core/config.py`). `SENT` deliveries are never re-sent; re-delivering a whole notification is allowed.
 - Guaranteed delivery: durable queue, `worker_ack_late=True`, `worker_prefetch_multiplier=1`. Beat task `sweep_deliveries` (every minute) re-drives due retries and resumes notifications stuck in `IN_PROGRESS` after a crash. All Celery tasks (`sweep_deliveries_task`, `send_batch_task`, `import_contacts_task`) have `autoretry_for=(Exception,)` with exponential backoff (max 3 retries) to prevent infinite redelivery from `task_acks_on_failure_or_timeout=False`.
-- A notification finalizes to SUCCESS / FAILED / PARTIAL_SUCCESS in `NotificationService.finalize_notification` only when all its deliveries are terminal (no PENDING left).
+- A notification finalizes to SUCCESS / FAILED / PARTIAL_SUCCESS in `NotificationService.finalize_notification` only when all its deliveries are terminal (no PENDING left). Finalization is **idempotent**: it does an atomic `UPDATE ... WHERE status = IN_PROGRESS` (`NotificationRepository.finalize_if_in_progress`), so concurrent batches/sweeper cannot double-finalize; `ens_notifications_total` is incremented exactly once per real transition.
 
 ## Conventions
 - Conventional commits (see git log): `feat(scope):`, `refactor:`, `test:`, `fix:`.
